@@ -8,7 +8,6 @@
   'use strict';
 
   // ============================================================ 기본 도구
-  var APP_FILE_BUILD = '2026-10-18b'; // 판 표시(관리자 › 점검)
   var $app = document.getElementById('app');
   var $modal = document.getElementById('modal-root');
   var $toast = document.getElementById('toast');
@@ -65,7 +64,7 @@
     'help.list': 1, 'staff.list': 1, 'notice.list': 1, 'admin.settings.get': 1, 'admin.cat.list': 1, 'admin.staff.list': 1,
     'admin.log.list': 1, 'admin.trash.list': 1, 'admin.trash.surveys': 1, 'admin.trash.library': 1, 'admin.year.preview': 1,
     'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1,
-    'table.list': 1, 'table.get': 1, 'table.poll': 1, 'table.find': 1, 'table.tpl.list': 1, 'table.tpl.get': 1, 'admin.trash.tables': 1
+    'ui.table': 1, 'table.list': 1, 'table.get': 1, 'table.poll': 1, 'table.find': 1, 'table.tpl.list': 1, 'table.tpl.get': 1, 'admin.trash.tables': 1
   };
   // 취합 시트에서 칸·열 너비·줄 높이·보기를 고치는 저장: 창 닫기를 막지 않는다(뒤에서 차례로 보냄)
   var QUIET_WRITES = { 'table.cell': 1, 'table.cells': 1, 'table.row.add': 1, 'table.colw': 1, 'table.rowh': 1, 'table.view': 1 };
@@ -712,6 +711,12 @@
       '<button type="button" class="linkish" data-action="identity" style="align-self:flex-start;margin-top:2px">본인 확인하기</button></span></div>';
   }
 
+  // PC 메뉴 아래 '화면 설정'(밝기·디자인·화면 크기)을 펼쳐 두었는지. 접어 두면 노트북 화면에서도 내 이름·나가기가 보인다
+  var sideSetOpen = false;
+  document.addEventListener('toggle', function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains('side-set')) sideSetOpen = e.target.open;
+  }, true);
+
   function renderApp() {
     closeModal();
     navSeq++;
@@ -726,9 +731,9 @@
       '<span class="brand-text"><span class="brand-sub">' + esc(school) + '</span><span class="brand-name">온라인 교무실</span></span></button>' +
       '<div class="nav">' + MENU.map(function (x) { return navButton(x); }).join('') + '</div>' +
       '<div class="nav-group"><span class="nav-label">관리 · 연구부장·부담당</span>' + ADMIN_MENU.map(function (x) { return navButton(x); }).join('') + '</div>' +
-      '<div class="side-foot">' + themeSeg() +
-      designSeg() +
-      zoomControl() +
+      '<div class="side-foot">' +
+      '<details class="side-set"' + (sideSetOpen ? ' open' : '') + '><summary>' + icon('textsize', 20) + '<span>화면 설정</span>' + icon('chevd', 18) + '</summary>' +
+      '<div class="side-set-body">' + themeSeg() + designSeg() + zoomControl() + '</div></details>' +
       meCard() +
       '<button type="button" class="nav-item small" data-action="logout">' + icon('out', 20) + '나가기</button></div>' +
       '</nav>' +
@@ -749,6 +754,7 @@
     var $s = qs('#screen');
     (SCREENS[m.id] || soonScreen)($s, m);
     setTimeout(prefetchScreens, 800); // 지금 화면을 먼저 받고, 나머지는 뒤에서
+    if (!TB && typeof loadTableUi === 'function') setTimeout(function () { loadTableUi().catch(function () {}); }, 3000); // 취합 시트 화면도 뒤에서 받아 둔다
   }
 
   // ------------------------------------------------------------ 휴대폰 '전체' 메뉴
@@ -1953,7 +1959,7 @@
 
   SCREENS.survey = function ($s) {
     var sv = S.survey;
-    $s.innerHTML = pageHead('', '조사·신청', '', S.me ? '<button type="button" class="btn print-hide" data-action="sv-new">' + icon('plus', 18) + '새 조사 만들기</button>' : '') +
+    $s.innerHTML = pageHead('', '조사·신청', '', S.me ? '<button type="button" class="btn btn-primary print-hide" data-action="sv-new">' + icon('plus', 18) + '새 조사 만들기</button>' : '') +
       '<div id="sv-body">' + loadingHtml('조사를 불러오는 중이에요') + '</div>';
     loadMemo('survey.list', {}, function (l) {
       if (S.screen !== 'survey') return;
@@ -4151,17 +4157,10 @@
   }
 
   // ------------------------------------------------------------ 관리자 · 점검
-  function clientBuilds() {
-    var meta = qs('meta[name="gy-build"]');
-    var css = '';
-    try { css = getComputedStyle(root).getPropertyValue('--gy-build').trim().replace(/^["']|["']$/g, ''); } catch (e) {}
-    return { app: APP_FILE_BUILD, styles: css, index: meta ? meta.getAttribute('content') : '', table: window.__gyTableUiBuild || '' };
-  }
-
   function adminCheck(panel) {
     if (!panel) return; // 그사이 다른 화면으로 옮겼으면
     panel.innerHTML = loadingHtml('점검하는 중이에요');
-    server('admin.check', { client: clientBuilds() }).then(function (r) {
+    server('admin.check', {}).then(function (r) {
       var label = { ok: '정상', warn: '확인 필요', bad: '문제' };
       var chip = { ok: 'chip-ok', warn: 'chip-warn', bad: 'chip-red' };
       var bad = r.items.filter(function (x) { return x.state === 'bad'; }).length;
@@ -4169,9 +4168,9 @@
       var groups = uniq(r.items.map(function (x) { return x.group; }));
       panel.innerHTML = '<div class="stack">' +
         '<section class="card check-sum"><div class="card-head"><div><h2>' + (bad ? '고칠 것이 ' + bad + '개 있어요' : warn ? '확인할 것이 ' + warn + '개 있어요' : '모두 정상이에요') + '</h2>' +
-        '<p class="faint" style="margin-top:4px">' + esc(atText(r.at)) + ' 점검 · 코드 판 ' + esc(r.build) + '</p></div>' +
+        '<p class="faint" style="margin-top:4px">' + esc(atText(r.at)) + ' 점검' + (r.build ? ' · 배포 ' + esc(r.build) : '') + '</p></div>' +
         '<button type="button" class="btn btn-sm" data-action="check-again">' + icon('reload', 18) + '다시 점검</button></div>' +
-        '<p class="hint">' + icon('info', 16) + '<span>코드를 새로 붙여 넣은 뒤나, 화면에 \'잠깐 문제가 생겼어요\'가 뜰 때 여기부터 보세요. 고친 뒤에는 배포 관리 → 새 버전으로 배포해야 반영돼요.</span></p></section>' +
+        '<p class="hint">' + icon('info', 16) + '<span>화면에 \'잠깐 문제가 생겼어요\'가 뜰 때 여기부터 보세요. 코드는 GitHub에서 고쳐 main에 합치면 같은 주소로 저절로 배포돼요.</span></p></section>' +
         groups.map(function (gname) {
           var list = r.items.filter(function (x) { return x.group === gname; });
           return '<section class="card"><h2>' + esc(gname) + '</h2><div class="check-list">' + list.map(function (x) {
@@ -4344,7 +4343,43 @@
     $s.innerHTML = pageHead('', '취합 시트', '') +
       '<section class="card"><p class="empty">취합 시트 화면 파일(TableUi)이 아직 없거나 열리지 않았어요. 연구부장·부담당께 알려 주세요(관리자 › 점검에서 확인할 수 있어요).</p></section>';
   }
-  SCREENS.table = tbMissing;
+  /**
+   * 취합 시트 화면 파일(TableUi, 약 250KB)은 처음 여는 속도를 위해 웹앱과 함께 받지 않는다.
+   * 첫 화면을 그린 뒤 뒤에서 받아 두고(renderApp), 그 전에 취합 시트를 누르면 그때 받아 붙인다
+   */
+  var tbLoading = null;
+  function loadTableUi() {
+    if (TB) return Promise.resolve(TB);
+    if (!tbLoading) {
+      tbLoading = server('ui.table', {}).then(function (r) {
+        var box = document.createElement('div');
+        box.innerHTML = r && r.html ? r.html : '';
+        qsa('style', box).forEach(function (st) { document.head.appendChild(st); });
+        qsa('script', box).forEach(function (old) { // innerHTML로 넣은 스크립트는 돌지 않아 새로 만들어 붙인다
+          var sc = document.createElement('script');
+          sc.text = old.textContent;
+          document.body.appendChild(sc);
+        });
+        attachTableUi();
+        if (!TB) throw new Error('취합 시트 화면을 열지 못했어요.');
+        return TB;
+      });
+      tbLoading.catch(function () { tbLoading = null; }); // 실패하면 다음에 다시 받는다
+    }
+    return tbLoading;
+  }
+  function tbLoader($s, m) {
+    var seq = navSeq;
+    $s.innerHTML = pageHead('', '취합 시트', '') + loadingHtml('취합 시트를 여는 중이에요');
+    loadTableUi().then(function () {
+      if (S.screen === 'table' && navSeq === seq && qs('#screen') === $s) SCREENS.table($s, m);
+    }).catch(function (e) {
+      if (S.screen !== 'table' || navSeq !== seq) return;
+      $s.innerHTML = pageHead('', '취합 시트', '') + failHtml(e) +
+        '<button type="button" class="btn" data-go="table" style="align-self:flex-start;margin-top:12px">' + icon('reload', 18) + '다시 열기</button>';
+    });
+  }
+  SCREENS.table = tbLoader;
 
   // ============================================================ 창(모달)
   var lastFocus = null, modalOpts = {};
@@ -4729,24 +4764,25 @@
   }
 
   // 취합 시트(TableUi.html)를 붙인다: 화면 도구를 넘겨주면 표 화면과 그 화면의 누르기·키 처리를 스스로 붙인다
-  try {
-    if (typeof window.__gyTableUi === 'function') {
-      TB = window.__gyTableUi({
-        S: S, SCREENS: SCREENS, $modal: $modal,
-        esc: esc, qs: qs, qsa: qsa, josa: josa, toast: toast, icon: icon, server: server,
-        memoPut: memoPut, memoGet: memoGet, memoForget: memoForget, loadMemo: loadMemo,
-        pageHead: pageHead, loadingHtml: loadingHtml, failHtml: failHtml, isPhone: isPhone,
-        mdw: mdw, md: md, localToday: localToday, addD: addD, ymdUtc: ymdUtc,
-        openModal: openModal, closeModal: closeModal, confirmBox: confirmBox, busy: busy, needMe: needMe,
-        copyText: copyText, saveBlob: saveBlob, closeSheet: closeSheet
-      });
+  function attachTableUi() {
+    try {
+      if (typeof window.__gyTableUi === 'function') {
+        TB = window.__gyTableUi({
+          S: S, SCREENS: SCREENS, $modal: $modal,
+          esc: esc, qs: qs, qsa: qsa, josa: josa, toast: toast, icon: icon, server: server,
+          memoPut: memoPut, memoGet: memoGet, memoForget: memoForget, loadMemo: loadMemo,
+          pageHead: pageHead, loadingHtml: loadingHtml, failHtml: failHtml, isPhone: isPhone,
+          mdw: mdw, md: md, localToday: localToday, addD: addD, ymdUtc: ymdUtc,
+          openModal: openModal, closeModal: closeModal, confirmBox: confirmBox, busy: busy, needMe: needMe,
+          copyText: copyText, saveBlob: saveBlob, closeSheet: closeSheet
+        });
+      }
+    } catch (e) {
+      TB = null;
+      if (window.console) console.error('취합 시트 화면을 붙이지 못했어요', e);
     }
-  } catch (e) {
-    TB = null;
-    SCREENS.table = tbMissing;
-    if (window.console) console.error('취합 시트 화면을 붙이지 못했어요', e);
+    if (!TB) { SCREENS.table = tbMissing; S.table = { tab: 'open', list: null, sel: '', d: null, edit: null, menu: null }; }
   }
-  if (!TB) { SCREENS.table = tbMissing; S.table = { tab: 'open', list: null, sel: '', d: null, edit: null, menu: null }; }
 
   // 미리보기·자동 점검에서 쓰는 창구
   window.__gy = { S: S, go: go, renderApp: renderApp, server: server, init: init, memoClear: memoClear, tableUi: function () { return TB; } };

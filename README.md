@@ -8,6 +8,7 @@
 
 `main` 브랜치에 변경이 반영되면 `.github/workflows/deploy.yml`이 자동으로 실행됩니다.
 
+1. `Build.gs`에 배포 정보(CHANGELOG 맨 위 제목, 커밋, 배포 시각)를 채웁니다. 관리자 › 점검의 '배포된 버전'에 보입니다.
 1. `clasp push`로 `.gs`, `.html`, `appsscript.json` 파일을 Apps Script 프로젝트에 올립니다.
 2. `clasp deploy -i <기존 배포 ID>`로 **기존 배포를 새 버전으로 갱신**합니다. 새 배포를 만들지 않으므로 웹앱 주소가 바뀌지 않습니다.
 3. 버전 설명에는 `CHANGELOG.md` 맨 위 항목 제목이 들어갑니다.
