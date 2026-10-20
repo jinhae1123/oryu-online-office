@@ -15,7 +15,9 @@
  *   Help.gs   도움말, 교직원 명단, 홈 검색, 공지
  *   Table.gs  취합 시트(예전 이름 '함께 쓰는 표'. 구글 시트처럼 여럿이 함께 채우는 표: 붙여 넣기, 칸 고치기, 10초마다 새로 받기, 시트 양식)
  *   Setup.gs  시트 메뉴, 처음 설정, 매일 백업, 테스트 데이터
+ *   Build.gs  배포 정보(GitHub 자동 배포가 배포할 때마다 새로 채운다)
  *   Index.html / Styles.html / App.html  화면
+ *   TableUi.html  취합 시트 화면(웹앱을 연 뒤 따로 받아 붙인다)
  */
 
 function doGet() {
@@ -24,30 +26,16 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
-/** Index.html 안에서 다른 HTML 파일을 끼워 넣을 때 쓴다. 파일이 없으면(아직 붙여 넣지 않은 새 파일) 빈칸으로 두고 나머지 화면은 그대로 연다 */
+/** Index.html 안에서 다른 HTML 파일을 끼워 넣을 때 쓴다 */
 function include(name) {
-  try {
-    return HtmlService.createHtmlOutputFromFile(name).getContent();
-  } catch (e) {
-    if (name === 'TableUi') return '<script>window.__gyTableUiMissing = true;</script>'; // 취합 시트 화면 파일이 없음 → 그 화면만 안내
-    throw e;
-  }
+  return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
 
-/** 이 코드 묶음의 판(버전). 가장 최근에 고친 판이다 */
-var APP_BUILD_ = '2026-10-18b';
-function fileMark_Code_() { return '2026-10-18b'; }
-
 /**
- * 파일마다 있어야 할 판. 관리자 › 점검이 각 파일의 판 표시(fileMark_○○_, App·Styles·Index의 판)와 견준다.
- * 파일을 고치면 그 파일의 판 표시와 여기 판을 함께 올린다 → 고친 파일만 다시 붙여 넣으면 된다.
+ * 취합 시트 화면(TableUi.html). 처음 여는 속도를 위해 웹앱과 함께 보내지 않고, 화면이 따로 받아 붙인다(App.html loadTableUi)
  */
-function fileBuilds_() {
-  return {
-    'Code': '2026-10-18b', 'Db': '2026-10-18b', 'Auth': '2026-10-16e', 'Admin': '2026-10-18b', 'Schedule': '2026-10-16e',
-    'Survey': '2026-10-16e', 'Library': '2026-10-16e', 'Help': '2026-10-16', 'Setup': '2026-10-16e', 'Table': '2026-10-18b',
-    'App': '2026-10-18b', 'Styles': '2026-10-18a', 'Index': '2026-10-18a', 'TableUi': '2026-10-18b'
-  };
+function apiTableUi_() {
+  return { html: HtmlService.createHtmlOutputFromFile('TableUi').getContent() };
 }
 
 /**
@@ -60,6 +48,7 @@ function routes_() {
     'start': { need: 'public', fn: 'apiStart_' },
     'ping': { need: 'public', fn: function () { return { at: Date.now() }; } }, // 속도 재기: 시트를 읽지 않는 빈 요청
     'boot': { need: 'login', fn: 'apiBoot_' },
+    'ui.table': { need: 'login', fn: 'apiTableUi_' }, // 취합 시트 화면 파일(뒤에서 받아 둔다)
     'batch': { need: 'login', fn: 'apiBatch_' }, // 미리 받기: 자주 여는 화면을 한 번에
     'login': { need: 'public', fn: function (a) { return login_(a); } },
     'session': { need: 'login', fn: 'apiSession_' },
@@ -173,7 +162,7 @@ var THEN_READS_ = { 'home': 1, 'session': 1, 'sched.month': 1, 'sched.year': 1, 
  */
 var BASE_TABS_ = ['설정', '교직원', '분류'];
 var ROUTE_TABS_ = {
-  'start': [], 'staffPicker': [], 'staff.list': [],
+  'start': [], 'staffPicker': [], 'staff.list': [], 'ui.table': [],
   'session': ['응답', '알림', '조사', '공지'],
   'home': ['일정', '월별중점', '학생수', '응답', '알림', '조사', '자료', '공지'],
   'sched.month': ['일정', '월별중점'],

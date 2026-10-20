@@ -366,7 +366,6 @@ body.tb-resizing.rows,body.tb-resizing.rows *{cursor:row-resize!important}
  * - 휴대폰은 위쪽 둥근 단추로 시트를 고르고 줄 목록 → 줄을 누르면 줄 고치기 창(서식은 PC·태블릿에서)
  * - 화면 코드에 U+2028·U+2029를 그대로 쓰지 않는다(\u2028처럼 적는다)
  */
-window.__gyTableUiBuild = '2026-10-18b';
 window.__gyTableUi = function (core) {
   'use strict';
   var S = core.S, SCREENS = core.SCREENS, $modal = core.$modal;
@@ -4040,7 +4039,6 @@ window.__gyTableUi = function (core) {
 
   // App.html이 부르는 것
   return {
-    build: window.__gyTableUiBuild,
     /** 메뉴에서 '취합 시트'를 누르면 목록부터 */
     reset: function () { S.table.sel = ''; S.table.sheet = ''; S.table.d = null; S.table.find = null; },
     /** 누구로 보는지가 바뀌면 들고 있던 표를 버린다 */

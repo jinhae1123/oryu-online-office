@@ -2,7 +2,6 @@
  * Admin.gs — 설정·분류·교직원 표·수정 기록 (관리자 화면)
  */
 
-function fileMark_Admin_() { return '2026-10-18b'; } // 판 표시(관리자 › 점검)
 
 // ---------------------------------------------------------------- 설정
 
@@ -324,44 +323,36 @@ function adminChangeAdminPw_(args, actor) {
 // ---------------------------------------------------------------- 점검 (관리자): 파일·시트·비밀번호·백업·설정을 한 번에
 
 /**
- * args.client = { app, styles, index, table } : 화면 파일의 판 표시(화면이 보낸다. table: 취합 시트 화면 TableUi.html)
  * 돌려주는 값: { build, at, items: [{ group, label, state: 'ok'|'warn'|'bad', detail, fix }] }
+ * 코드는 GitHub에서 한꺼번에 배포하므로 파일마다 판을 견주지 않고, 배포 정보(Build.gs)와 파일이 다 있는지만 본다
  */
 function adminCheck_(args) {
   var items = [];
   var add = function (group, label, state, detail, fix) { items.push({ group: group, label: label, state: state, detail: detail || '', fix: fix || '' }); };
-  var paste = function (f) { return "설치안내 표의 '" + f + "' 파일을 Copy raw file로 다시 붙여 넣고, 배포 관리 → 새 버전으로 배포해 주세요"; };
+  var redeploy = 'GitHub 저장소의 Actions › "Apps Script 배포" › Run workflow로 다시 배포해 주세요';
 
-  // 1) 코드 파일(빠진 파일·예전 파일). 파일마다 있어야 할 판은 Code.gs의 fileBuilds_() 표에 있다
-  var buildsFn = globalFn_('fileBuilds_');
-  var builds = buildsFn ? buildsFn() : {};
-  var want = function (f) { return builds[f] || APP_BUILD_; };
-  // 판 표시가 없어도 이 파일의 함수가 있으면 판 표시를 넣기 전(2026-10-15)의 예전 파일이다
+  // 1) 배포 정보와 코드 파일
+  var infoFn = globalFn_('deployInfo_');
+  var info = infoFn ? infoFn() : {};
+  var build = info.title ? info.title + (info.commit ? ' (' + info.commit + ')' : '') : '';
+  if (build) add('코드 파일', '배포된 버전', 'ok', build + (info.at ? ' · ' + info.at + ' 배포' : ''));
+  else add('코드 파일', '배포된 버전', 'warn', 'GitHub 자동 배포로 올린 버전이 아니에요', redeploy);
+  // 파일마다 그 파일에만 있는 함수가 보이면 파일이 있는 것이다
   var probe = { 'Code': 'api', 'Db': 'sheetValues_', 'Auth': 'checkLogin_', 'Admin': 'adminCheck_', 'Schedule': 'apiSchedMonth_',
     'Survey': 'apiSurveyList_', 'Library': 'apiLibList_', 'Help': 'apiHelpList_', 'Setup': 'setupAll_', 'Table': 'apiTableList_' };
-  ['Code', 'Db', 'Auth', 'Admin', 'Schedule', 'Survey', 'Library', 'Help', 'Setup', 'Table'].forEach(function (f) {
-    var mark = globalFn_('fileMark_' + f + '_');
-    if (!mark && globalFn_(probe[f])) add('코드 파일', f + '.gs', 'warn', '판 표시가 없는 예전 파일이에요(기능은 돌아가요)', paste(f));
-    else if (!mark) add('코드 파일', f + '.gs', 'bad', '파일이 없거나 내용이 비어 있어요', paste(f));
-    else if (f === 'Code' && !buildsFn) add('코드 파일', 'Code.gs', 'warn', '예전 판이에요(' + mark() + ')', paste(f));
-    else if (mark() !== want(f)) add('코드 파일', f + '.gs', 'warn', '예전 판이에요(' + mark() + ')', paste(f));
-    else add('코드 파일', f + '.gs', 'ok', '최신 판 ' + mark());
+  var lost = Object.keys(probe).filter(function (f) { return !globalFn_(probe[f]); }).map(function (f) { return f + '.gs'; });
+  ['Index', 'Styles', 'App', 'TableUi'].forEach(function (f) {
+    try { HtmlService.createHtmlOutputFromFile(f); } catch (e) { lost.push(f + '.html'); }
   });
-  var c = (args && args.client) || {};
-  [['App.html', c.app], ['Styles.html', c.styles], ['Index.html', c.index], ['TableUi.html', c.table]].forEach(function (x) {
-    var f = x[0].replace('.html', '');
-    if (!x[1] && f === 'TableUi') add('코드 파일', x[0], 'bad', '파일이 없어요(취합 시트 화면)', "Apps Script 편집기에서 + → HTML로 'TableUi' 파일을 새로 만들고, 설치안내 표의 'TableUi' 파일을 Copy raw file로 붙여 넣어 주세요");
-    else if (!x[1]) add('코드 파일', x[0], 'warn', '판 표시를 찾지 못했어요(예전 파일일 수 있어요)', paste(f));
-    else if (x[1] !== want(f)) add('코드 파일', x[0], 'warn', '예전 판이에요(' + x[1] + ')', paste(f));
-    else add('코드 파일', x[0], 'ok', '최신 판 ' + x[1]);
-  });
+  if (lost.length) add('코드 파일', '파일', 'bad', '없는 파일: ' + lost.join(', '), redeploy);
+  else add('코드 파일', '파일', 'ok', '서버 파일 ' + Object.keys(probe).length + '개, 화면 파일 4개가 모두 있어요');
   var routes = routes_(), missing = [], n = 0;
   Object.keys(routes).forEach(function (k) {
     if (typeof routes[k].fn !== 'string') return;
     n++;
     if (!globalFn_(routes[k].fn)) missing.push(routes[k].fn);
   });
-  if (missing.length) add('코드 파일', '기능 연결', 'bad', '찾지 못한 기능 ' + missing.length + '개: ' + missing.slice(0, 5).join(', ') + (missing.length > 5 ? ' …' : ''), '위에서 문제로 나온 파일을 다시 붙여 넣어 주세요');
+  if (missing.length) add('코드 파일', '기능 연결', 'bad', '찾지 못한 기능 ' + missing.length + '개: ' + missing.slice(0, 5).join(', ') + (missing.length > 5 ? ' …' : ''), redeploy);
   else add('코드 파일', '기능 연결', 'ok', '기능 ' + n + '개가 모두 연결됐어요');
 
   // 2) 시트 탭·칸 (나중에 더한 탭·칸 중 처음 쓸 때 저절로 생기는 것은 없어도 괜찮다)
@@ -446,7 +437,7 @@ function adminCheck_(args) {
   add('교직원', '사용 중인 교직원', staff.length ? 'ok' : 'bad', staff.length + '명', staff.length ? '' : '관리자 › 교직원 표에서 넣거나 "명단 한 번에 넣기"를 써 주세요');
   if (noDept) add('교직원', '부서 없는 분', 'warn', noDept + '명', '교직원 표에서 부서를 골라 주세요(내 담당·조사 대상에 쓰여요)');
 
-  return { build: APP_BUILD_, at: nowText_(), items: items };
+  return { build: build, at: nowText_(), items: items };
 }
 
 // ---------------------------------------------------------------- 속도 재기 (관리자 › 점검)
