@@ -1,0 +1,63 @@
+# main 브랜치에 변경이 반영되면 Apps Script에 코드를 올리고
+# 기존 웹앱 배포(같은 /exec 주소)를 새 버전으로 갱신합니다.
+name: Apps Script 배포
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'CLAUDE.md'
+  workflow_dispatch:
+
+concurrency:
+  group: apps-script-deploy
+  cancel-in-progress: false
+
+env:
+  # 웹앱 주소 https://script.google.com/macros/s/<배포 ID>/exec 의 <배포 ID>.
+  # 새 배포를 만들지 않고 이 배포만 새 버전으로 갱신하므로 주소가 바뀌지 않습니다.
+  DEPLOYMENT_ID: AKfycbwhlNdVDSsMu34QasylaGvoaslxZSf4KX2yY6qnYqyjGEEtWuGorlnjtXSLK3Swte669A
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: clasp 설치
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: clasp 인증 정보 준비
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::error::GitHub Secret CLASPRC_JSON 또는 SCRIPT_ID가 등록되지 않았습니다."
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"."}' "$SCRIPT_ID" > .clasp.json
+
+      - name: 코드 업로드 (clasp push)
+        run: clasp push --force
+
+      - name: 버전 설명 만들기
+        id: desc
+        run: |
+          # CHANGELOG.md 맨 위 항목 제목을 버전 설명으로 사용하고, 없으면 커밋 제목을 씁니다.
+          desc=$(grep -m1 '^## ' CHANGELOG.md 2>/dev/null | sed 's/^## *//')
+          [ -z "$desc" ] && desc=$(git log -1 --pretty=%s)
+          desc="${desc:0:90} (${GITHUB_SHA::7})"
+          echo "value=$desc" >> "$GITHUB_OUTPUT"
+
+      - name: 기존 배포를 새 버전으로 갱신 (clasp deploy -i)
+        run: clasp deploy -i "$DEPLOYMENT_ID" -d "${{ steps.desc.outputs.value }}"
+
+      - name: 배포 결과 확인
+        run: clasp deployments
