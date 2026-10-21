@@ -3957,7 +3957,8 @@
 
   function drawMeeting(m) {
     var body = qs('#notice-body');
-    var head = '<div class="meet-top print-hide"><button type="button" class="btn btn-sm" data-action="meet-back">' + icon('chevl', 18) + '회의 목록</button>' + meetEditBtns(m) + '</div>' +
+    var head = '<div class="meet-top print-hide"><button type="button" class="btn btn-sm" data-action="meet-back">' + icon('chevl', 18) + '회의 목록</button>' +
+      '<span class="row-btns"><button type="button" class="btn btn-sm" data-action="meet-print">' + icon('print', 18) + '인쇄</button>' + meetEditBtns(m) + '</span></div>' +
       '<article class="card meet-doc"><div class="sv-chips">' + meetKindChip(m) + (m.imported ? '<span class="chip">예전 시트에서 옮김</span>' : '') + '</div>' +
       '<h2>' + esc(m.title) + '</h2><p class="faint">' + esc(meetWhen(m)) + '</p>';
     body.innerHTML = head + (m.kind === '부장회의' ? meetBoardHtml(m) : meetStaffHtml(m)) + '</article>';
@@ -4099,6 +4100,25 @@
     });
   }
 
+  /** 회의 한 건을 A4 세로로 인쇄: 제목·일시·표만(버튼·적은 분·안 쓴 칸 문구는 뺀다, Styles.html body.print-meet) */
+  function meetPrint() {
+    document.body.classList.add('print-meet');
+    var st = qs('#meet-page');
+    if (!st) {
+      st = document.createElement('style');
+      st.id = 'meet-page';
+      st.textContent = '@page{size:A4 portrait;margin:12mm}';
+      document.head.appendChild(st);
+    }
+    var done = function () {
+      document.body.classList.remove('print-meet');
+      if (st.parentNode) st.parentNode.removeChild(st);
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    window.print();
+  }
+
   function meetAction(a, t, id) {
     var m = meetById(S.meet.openId);
     switch (a) {
@@ -4108,6 +4128,7 @@
         else { S.notice.tab = 'meet'; go('notice'); }
         break;
       case 'meet-back': S.meet.openId = ''; drawMeetings(); window.scrollTo(0, 0); break;
+      case 'meet-print': meetPrint(); break;
       case 'meet-kind': S.meet.kind = t.getAttribute('data-v'); drawMeetings(); break;
       case 'meet-new': openMeetForm(null); break;
       case 'meet-edit': openMeetForm(meetById(id)); break;
@@ -5148,7 +5169,7 @@
         if (S.notice.tab === 'meet') S.meet.openId = '';
         SCREENS.notice(qs('#screen'));
         break;
-      case 'meet-open': case 'meet-back': case 'meet-kind': case 'meet-new': case 'meet-edit': case 'meet-del': case 'meet-slot':
+      case 'meet-open': case 'meet-back': case 'meet-print': case 'meet-kind': case 'meet-new': case 'meet-edit': case 'meet-del': case 'meet-slot':
       case 'meet-line-new': case 'meet-line-edit': case 'meet-line-del': case 'meet-move':
         meetAction(a, t, id);
         break;
