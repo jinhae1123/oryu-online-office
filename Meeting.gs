@@ -307,6 +307,38 @@ function apiMeetEntryMove_(args, actor, ctx) {
 
 // ---------------------------------------------------------------- 기존 회의록 가져오기 (관리자)
 
+/**
+ * 가져올 표 읽기: args.sheets(화면이 엑셀 파일에서 읽어 보낸 탭들) 또는 args.url(구글 시트 주소)
+ * → [{ name, vals(글자) }]. 탭마다 왼쪽의 빈 열은 떼어 낸다(어떤 탭은 한 칸 밀려 있다)
+ */
+function sheetsFromArgs_(args) {
+  var sheets;
+  if (Array.isArray(args.sheets)) {
+    sheets = args.sheets.slice(0, 60).map(function (sh) {
+      var vals = Array.isArray(sh && sh.vals) ? sh.vals.slice(0, 5000) : [];
+      return {
+        name: String((sh && sh.name) || '').slice(0, 60),
+        vals: vals.map(function (row) { return (Array.isArray(row) ? row.slice(0, 30) : []).map(function (c) { return String(c === null || c === undefined ? '' : c).slice(0, 20000); }); })
+      };
+    });
+    if (!sheets.length) throw userError_('엑셀 파일에서 시트를 찾지 못했어요.');
+  } else {
+    sheets = meetReadSheet_(args.url);
+  }
+  return sheets.map(function (sh) {
+    var left = sh.vals.reduce(function (n, row) {
+      for (var i = 0; i < row.length && i < n; i++) if (String(row[i]).trim()) return i;
+      return n;
+    }, 99);
+    return { name: sh.name, vals: left > 0 && left < 99 ? sh.vals.map(function (row) { return row.slice(left); }) : sh.vals };
+  });
+}
+
+/** 어디서 가져왔는지(기록용) */
+function sourceOfArgs_(args) {
+  return Array.isArray(args.sheets) ? '엑셀 파일: ' + String(args.fileName || '').slice(0, 100) : String(args.url || '').trim().slice(0, 300);
+}
+
 /** 시트 주소 → [{ name, vals(보이는 글자) }] */
 function meetReadSheet_(url) {
   url = String(url || '').trim();
@@ -422,11 +454,12 @@ function meetParseStaff_(sheets, today) {
       if (head === '장소') { cur.place = cells.slice(1).filter(Boolean).join(' '); return; }
       if (/<\s*연수\s*>/.test(line)) { sec = '연수'; return; }
       if (/<\s*안건\s*>/.test(line)) { sec = '안건'; return; }
+      if (/<\s*소개\s*>/.test(line)) { sec = '소개'; return; } // 새로 오신 분 소개: 연수 표에 [소개]를 붙여 넣는다
       if (!sec) return;
       if (cells.some(function (c) { return meetSquash_(c) === '내용'; })) return; // 머리글 줄
       var text = cells[1];
       if (!text) return;
-      cur.entries.push({ slot: sec, text: text, who: cells[2] || '', note: cells[3] || '' });
+      cur.entries.push({ slot: sec === '소개' ? '연수' : sec, text: (sec === '소개' ? '[소개] ' : '') + text, who: cells[2] || '', note: cells[3] || '' });
     });
   });
   out.forEach(function (m) {
@@ -450,7 +483,7 @@ function meetKey_(m) {
 function meetImportPlan_(args) {
   var kind = String(args.kind || '');
   if (MEET_KINDS_.indexOf(kind) < 0) throw userError_('가져올 회의 종류를 골라 주세요.');
-  var sheets = meetReadSheet_(args.url);
+  var sheets = sheetsFromArgs_(args);
   var depts = deptOptions_();
   var list = kind === '부장회의' ? meetParseBoard_(sheets, depts) : meetParseStaff_(sheets, todayYmd_());
   var have = {};
@@ -482,7 +515,7 @@ function adminMeetImport_(args, actor) {
   if (!add.length) return { added: 0, entries: 0 };
   meetEnsure_();
   return withLock_(function () {
-    var src = String(args.url).trim().slice(0, 300);
+    var src = sourceOfArgs_(args);
     var saved = insertRows_('회의', add.map(function (m) {
       return { '종류': m.kind, '학년도': m.year, '학기': m.term, '회차': m.round, '제목': m.title, '날짜': m.date, '시간': m.time, '장소': m.place || '', '일정ID': '', '가져온 곳': src };
     }), actor, p.kind + ' 회의록 ' + add.length + '건 가져옴');

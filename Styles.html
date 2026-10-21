@@ -723,6 +723,24 @@ body.gy-dragging,body.gy-dragging *{cursor:grabbing!important;-webkit-user-selec
 .meet-tbl .c-note{width:140px}
 .meet-acts{flex-wrap:nowrap;gap:4px}
 .meet-by{display:block;margin-top:4px;font-size:12.5px}
+@media print{
+  body.print-meet #screen>:not(#notice-body){display:none!important}
+  body.print-meet .meet-doc{padding:0;border:0;border-radius:0;gap:10px}
+  body.print-meet .meet-doc .sv-chips,body.print-meet .meet-doc .meet-line-f,body.print-meet .meet-doc .meet-none,body.print-meet .meet-doc .meet-by{display:none!important}
+  body.print-meet .meet-doc h2{font-size:20px}
+  body.print-meet .meet-board,body.print-meet .meet-doc .table-wrap{overflow:visible;border-radius:0}
+  body.print-meet .meet-tr{grid-template-columns:120px 1fr;break-inside:avoid}
+  body.print-meet .meet-th{display:grid}
+  body.print-meet .meet-k,body.print-meet .meet-v,body.print-meet .meet-th>div{padding:6px 10px}
+  body.print-meet .meet-empty .meet-k{color:#191F28!important}
+  body.print-meet .meet-line{border-bottom:0;padding-bottom:0}
+  body.print-meet .meet-tbl tr{break-inside:avoid}
+  body.print-meet .meet-tbl td,body.print-meet .meet-tbl th{padding:5px 8px}
+  body.print-meet .help-text{line-height:1.5}
+}
+.plan .c-duty{width:96px;font-size:13px;white-space:nowrap}
+.plan-duty{display:block;width:100%;min-height:24px;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.plan-duty:hover{text-decoration:underline}
 @media (max-width:599px){
   .meet-tr{grid-template-columns:1fr}
   .meet-th{display:none}

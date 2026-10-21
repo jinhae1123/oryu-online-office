@@ -166,6 +166,7 @@ function apiSchedMonth_(args, actor, ctx) {
     to: to,
     events: eventsBetween_(from, to, ctx),
     focus: focusOf_(sy, m),
+    duty: optional_('dutyBetween_', {})(first, last), // 보안관·당직(MonthPlan.gs)
     monthDays: semesterIn_(sy) ? instructionalDays_(first, last) : null, // 이 달의 학년도에 학기 기간이 없으면 0일이 아니라 '없음'
     canManage: canManage_(ctx),
     depts: deptOptions_(),
