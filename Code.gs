@@ -90,6 +90,12 @@ function routes_() {
     'notice.list': { need: 'login', fn: 'apiNoticeList_' },
     'notice.save': { need: 'identity', fn: 'apiNoticeSave_' },
     'notice.delete': { need: 'identity', fn: 'apiNoticeDelete_' },
+    'meet.list': { need: 'login', fn: 'apiMeetList_' },
+    'meet.save': { need: 'identity', fn: 'apiMeetSave_' },
+    'meet.delete': { need: 'identity', fn: 'apiMeetDelete_' },
+    'meet.entry.save': { need: 'identity', fn: 'apiMeetEntrySave_' },
+    'meet.entry.delete': { need: 'identity', fn: 'apiMeetEntryDelete_' },
+    'meet.entry.move': { need: 'identity', fn: 'apiMeetEntryMove_' },
 
     'table.list': { need: 'login', fn: 'apiTableList_' },
     'table.get': { need: 'login', fn: 'apiTableGet_' },
@@ -148,7 +154,9 @@ function routes_() {
     'admin.staff.importCheck': { need: 'admin', fn: 'adminStaffImportCheck_' },
     'admin.staff.import': { need: 'admin', fn: 'adminStaffImport_' },
     'admin.site.preview': { need: 'admin', fn: function () { return adminSiteLinksPreview_(); } },
-    'admin.site.import': { need: 'admin', fn: 'adminSiteLinksImport_' }
+    'admin.site.import': { need: 'admin', fn: 'adminSiteLinksImport_' },
+    'admin.meet.preview': { need: 'admin', fn: 'adminMeetImportPreview_' },
+    'admin.meet.import': { need: 'admin', fn: 'adminMeetImport_' }
   };
 }
 
@@ -156,7 +164,7 @@ function routes_() {
  * 쓰기 뒤 같은 요청 안에서 이어 읽을 수 있는 화면(로그인만 있으면 되는 읽기만).
  * 저장한 다음 목록을 다시 부르느라 서버를 한 번 더 다녀오지 않게 한다(속도).
  */
-var THEN_READS_ = { 'home': 1, 'session': 1, 'sched.month': 1, 'sched.year': 1, 'survey.list': 1, 'survey.get': 1, 'notice.list': 1, 'help.list': 1, 'lib.list': 1, 'staff.list': 1, 'table.list': 1, 'table.get': 1, 'table.tpl.list': 1 };
+var THEN_READS_ = { 'home': 1, 'session': 1, 'sched.month': 1, 'sched.year': 1, 'survey.list': 1, 'survey.get': 1, 'notice.list': 1, 'meet.list': 1, 'help.list': 1, 'lib.list': 1, 'staff.list': 1, 'table.list': 1, 'table.get': 1, 'table.tpl.list': 1 };
 
 /**
  * 요청마다 읽는 탭(서버 기억에서 한 번에 꺼내 두기, 속도). 로그인·본인 확인에서 늘 설정·교직원·분류를 읽는다.
@@ -173,6 +181,7 @@ var ROUTE_TABS_ = {
   'survey.get': ['조사', '응답', '알림'],
   'lib.list': ['자료'],
   'notice.list': ['공지'],
+  'meet.list': ['회의', '회의내용'],
   'help.list': ['도움말'],
   'table.list': ['함께표', '함께표줄'],
   'table.get': ['함께표', '함께표줄'],
@@ -180,7 +189,7 @@ var ROUTE_TABS_ = {
   'table.find': ['함께표', '함께표줄'],
   'table.tpl.list': ['시트양식'],
   'table.tpl.get': ['시트양식'],
-  'search': ['일정', '자료', '도움말', '공지', '조사', '응답', '알림']
+  'search': ['일정', '자료', '도움말', '공지', '조사', '응답', '알림', '회의', '회의내용']
 };
 
 /** 요청이 읽을 탭 목록. boot·batch·이어 읽기(then)는 합친다 */

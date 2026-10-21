@@ -696,6 +696,40 @@ body.gy-dragging,body.gy-dragging *{cursor:grabbing!important;-webkit-user-selec
 .site-list{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:2px 16px}
 .site-item{padding:6px 0;border-bottom:1px solid var(--c-line);font-size:15px}
 .site-item .chip{min-height:22px;padding:0 8px;font-size:12px}
+.notice-tabs{margin-top:-8px}
+.meet-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.meet-bar select.input{width:auto;min-width:200px}
+.meet-bar .seg{flex:0 1 auto}
+.meet-bar .seg button{padding:0 14px}
+.meet-bar .btn-primary{margin-left:auto}
+.meet-list{display:flex;flex-direction:column;gap:10px}
+.meet-item{gap:6px;padding:18px 22px;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.meet-item-t{font-size:18px;font-weight:800;letter-spacing:-0.02em}
+.meet-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.meet-board{border:1px solid var(--c-line);border-radius:14px;overflow:hidden}
+.meet-tr{display:grid;grid-template-columns:150px 1fr;border-top:1px solid var(--c-line)}
+.meet-tr:first-child{border-top:0}
+.meet-th{background:var(--c-card2);font-size:14px;font-weight:700;color:var(--c-t2)}
+.meet-th>div{padding:10px 14px}
+.meet-k{padding:12px 14px;font-weight:800;background:var(--c-card2);overflow-wrap:anywhere}
+.meet-v{padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.meet-empty .meet-k{color:var(--c-t3);font-weight:700}
+.meet-none{margin:0}
+.meet-line{display:flex;flex-direction:column;gap:4px;padding-bottom:8px;border-bottom:1px dashed var(--c-line)}
+.meet-line-f{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}
+.meet-sec{display:flex;flex-direction:column;gap:10px}
+.meet-tbl .c-n{width:40px;text-align:center}
+.meet-tbl .c-who{width:120px}
+.meet-tbl .c-note{width:140px}
+.meet-acts{flex-wrap:nowrap;gap:4px}
+.meet-by{display:block;margin-top:4px;font-size:12.5px}
+@media (max-width:599px){
+  .meet-tr{grid-template-columns:1fr}
+  .meet-th{display:none}
+  .meet-k{padding:8px 14px}
+  .meet-bar select.input{flex:1 1 100%}
+  .meet-bar .btn-primary{margin-left:0}
+}
 @media (hover:hover){ .sr-row:hover{background:var(--c-card2)} .lib-title:hover{color:var(--accent)} .help-item summary:hover .help-t{color:var(--accent)} }
 @media (max-width:899px){
   .home-search{width:100%}

@@ -61,9 +61,9 @@
   var READS = {
     start: 1, ping: 1, boot: 1, batch: 1, session: 1, staffPicker: 1, home: 1, search: 1, 'sched.month': 1, 'sched.year': 1,
     'sched.upload.info': 1, 'sched.upload.check': 1, 'survey.list': 1, 'survey.get': 1, 'survey.csv': 1, 'lib.list': 1, 'file.get': 1,
-    'help.list': 1, 'staff.list': 1, 'notice.list': 1, 'admin.settings.get': 1, 'admin.cat.list': 1, 'admin.staff.list': 1,
+    'help.list': 1, 'staff.list': 1, 'notice.list': 1, 'meet.list': 1, 'admin.settings.get': 1, 'admin.cat.list': 1, 'admin.staff.list': 1,
     'admin.log.list': 1, 'admin.trash.list': 1, 'admin.trash.surveys': 1, 'admin.trash.library': 1, 'admin.year.preview': 1,
-    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1, 'admin.site.preview': 1,
+    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1, 'admin.site.preview': 1, 'admin.meet.preview': 1,
     'ui.table': 1, 'table.list': 1, 'table.get': 1, 'table.poll': 1, 'table.find': 1, 'table.tpl.list': 1, 'table.tpl.get': 1, 'admin.trash.tables': 1
   };
   // 취합 시트에서 칸·열 너비·줄 높이·보기를 고치는 저장: 창 닫기를 막지 않는다(뒤에서 차례로 보냄)
@@ -3025,6 +3025,9 @@
       { key: 'notices', label: '공지', icon: 'bell', row: function (n) {
         return srRow('notice-open', n.id, 'bell', (n.pinned ? starHtml() : '') + esc(n.title), [n.dept, n.active ? '' : '끝난 공지'].filter(Boolean).join(' · '));
       } },
+      { key: 'meetings', label: '회의록', icon: 'doc', row: function (m) {
+        return srRow('meet-open', m.id, 'doc', esc(m.title), [m.kind, m.date ? mdw(m.date) + (m.date.slice(0, 4) !== r.today.slice(0, 4) ? ' · ' + m.date.slice(0, 4) + '년' : '') : ''].filter(Boolean).join(' · '));
+      } },
       { key: 'surveys', label: '조사·신청', icon: 'survey', row: function (c) {
         return srRow('sr-sv', c.id, 'survey', esc(c.title), (c.closed ? '끝남' : c.deadlineText + '까지') + (c.dept ? ' · ' + c.dept : ''),
           c.inTarget && !c.closed ? (c.answered ? '냈어요' : '아직 안 냄') : '');
@@ -3131,7 +3134,8 @@
         '<ul class="site-list">' + p.items.map(row).join('') + '</ul>' +
         '<p class="err" id="site-err" role="alert"></p>' +
         (news.length ? '<button type="button" class="btn btn-primary" id="site-go" style="align-self:flex-start">링크 ' + news.length + '개 넣기</button>'
-          : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section></div>';
+          : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section><section class="card" id="meet-imp"></section></div>';
+      meetImportCard(qs('#meet-imp'));
       var go = qs('#site-go');
       if (go) go.addEventListener('click', function () {
         confirmBox('링크 ' + news.length + '개를 넣을까요?', esc(p.year) + '학년도 자료실에 종합사이트 링크 ' + news.length + '개를 카드로 넣어요.', '넣기', function () {
@@ -3144,6 +3148,65 @@
         });
       });
     }).catch(function (e) { panel.innerHTML = failHtml(e); });
+  }
+
+  /** 관리자 › 가져오기: 예전 구글 시트의 부장회의·교직원회의 회의록을 옮긴다 */
+  var MEET_IMP = { url: '', kind: '부장회의' };
+  function meetImportCard(box) {
+    if (!box) return;
+    var kb = function (v) { return '<button type="button" data-v="' + v + '" aria-pressed="' + (MEET_IMP.kind === v) + '">' + v + '</button>'; };
+    box.innerHTML = '<h2>기존 회의록 가져오기</h2>' +
+      '<p class="muted" style="margin:0">예전에 구글 시트로 쓰던 회의록을 공지 › 회의록으로 옮겨요. 시트 주소를 넣고 \'살펴보기\'를 누르면 옮길 회의를 먼저 보여 드려요.</p>' +
+      '<ul class="guide-list"><li>부장회의 시트: 학기마다 탭이 있고, 탭 안에 \'2026학년도 2학기 부장회의 (5)\' 같은 제목으로 회의가 쌓인 모양</li>' +
+      '<li>교직원회의 시트: 달마다 탭이 있고, 일시·장소와 &lt;연수&gt;·&lt;안건&gt; 표가 있는 모양</li>' +
+      '<li>이미 옮긴 회의(부장회의는 학년도·학기·회차, 교직원회의는 날짜가 같은 것)는 다시 넣지 않아요. 여러 번 눌러도 괜찮아요.</li>' +
+      '<li>시트는 웹앱을 만든 계정이 볼 수 있어야 해요. 원래 시트는 바뀌지 않아요.</li></ul>' +
+      '<div class="field"><span class="label">회의 종류</span><div class="seg" id="mi-kind" role="group" aria-label="회의 종류">' + kb('부장회의') + kb('교직원회의') + '</div></div>' +
+      '<div class="field"><label class="label" for="mi-url">시트 주소</label><input id="mi-url" class="input" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="' + esc(MEET_IMP.url) + '"></div>' +
+      '<p class="err" id="mi-err" role="alert"></p><button type="button" class="btn" id="mi-check" style="align-self:flex-start">' + icon('search', 18) + '살펴보기</button><div id="mi-out" class="stack"></div>';
+    qs('#mi-kind').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-v]');
+      if (!b) return;
+      MEET_IMP.kind = b.getAttribute('data-v');
+      qsa('#mi-kind button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      qs('#mi-out').innerHTML = '';
+    });
+    var check = qs('#mi-check');
+    check.addEventListener('click', function () {
+      MEET_IMP.url = qs('#mi-url').value.trim();
+      var err = qs('#mi-err'), out = qs('#mi-out');
+      err.textContent = '';
+      if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(MEET_IMP.url)) { err.textContent = '구글 시트 주소(https://docs.google.com/spreadsheets/d/…)를 넣어 주세요.'; return; }
+      busy(check, true, '시트를 읽는 중');
+      var args = { url: MEET_IMP.url, kind: MEET_IMP.kind };
+      server('admin.meet.preview', args).then(function (p) {
+        busy(check, false);
+        var news = p.items.filter(function (i) { return i.state === 'new'; });
+        var lines = news.reduce(function (n, i) { return n + i.entries; }, 0);
+        var stateText = { have: '이미 있음', dup: '시트 안에 같은 회의가 또 있음' };
+        out.innerHTML = '<p class="faint" style="margin:0">읽은 탭: ' + esc(p.sheets.join(', ')) + '</p>' +
+          (p.items.length ? '<ul class="site-list">' + p.items.map(function (i) {
+            return '<li class="site-item' + (i.state === 'new' ? '' : ' faint') + '"><b>' + esc(i.title) + '</b> <span class="faint">' +
+              esc([i.date ? mdw(i.date) + ' · ' + i.date.slice(0, 4) + '년' : '', i.time, i.place, '내용 ' + i.entries + '줄', i.sheet + ' 탭'].filter(Boolean).join(' · ')) + '</span>' +
+              (i.state === 'new' ? '' : ' <span class="chip">' + stateText[i.state] + '</span>') +
+              (i.noDate ? ' <span class="chip chip-warn">날짜를 못 찾아 그달 1일로 넣음</span>' : '') +
+              (i.unmatched.length ? '<br><span class="faint">못 찾은 칸 이름 ' + esc(i.unmatched.join(', ')) + ' → 기타 안건에 [이름]을 붙여 넣어요</span>' : '') + '</li>';
+          }).join('') + '</ul>' : '<p class="err">' + esc(p.kind) + ' 회의를 찾지 못했어요. 회의 종류와 시트 주소를 확인해 주세요.</p>') +
+          (news.length ? '<button type="button" class="btn btn-primary" id="mi-go" style="align-self:flex-start">회의 ' + news.length + '건 옮기기</button>'
+            : p.items.length ? '<p class="ok-text">옮길 회의가 없어요. 모두 들어가 있어요.</p>' : '');
+        var goBtn = qs('#mi-go');
+        if (goBtn) goBtn.addEventListener('click', function () {
+          confirmBox('회의 ' + news.length + '건을 옮길까요?', esc(p.kind) + ' ' + news.length + '건(내용 ' + lines + '줄)을 공지 › 회의록에 넣어요. 일정에는 넣지 않아요.', '옮기기', function () {
+            return server('admin.meet.import', args).then(function (r) {
+              closeModal();
+              S.meet.data = null;
+              toast('회의 ' + r.added + '건, 내용 ' + r.entries + '줄을 옮겼어요');
+              check.click();
+            });
+          });
+        });
+      }).catch(function (e) { busy(check, false); err.textContent = e.message; });
+    });
   }
 
   // ============================================================ 엑셀(.xlsx)·CSV 읽기와 양식 만들기 (바깥 도구 없이)
@@ -3569,11 +3632,15 @@
   }
 
   // ============================================================ 공지
-  S.notice = { data: null, view: 'now', openNew: false };
+  S.notice = { data: null, view: 'now', openNew: false, tab: 'notice' };
 
   SCREENS.notice = function ($s) {
-    $s.innerHTML = pageHead('', '공지', '', '<button type="button" class="btn btn-primary print-hide" data-action="notice-new">' + icon('plus', 18) + '공지 쓰기</button>') +
-      '<div id="notice-body" class="stack">' + loadingHtml('공지를 불러오는 중이에요') + '</div>';
+    var meet = S.notice.tab === 'meet';
+    var tabBtn = function (v, label) { return '<button type="button" class="tab" role="tab" data-action="notice-tab" data-v="' + v + '" aria-selected="' + (S.notice.tab === v) + '">' + label + '</button>'; };
+    $s.innerHTML = pageHead('', '공지', '', meet ? '' : '<button type="button" class="btn btn-primary print-hide" data-action="notice-new">' + icon('plus', 18) + '공지 쓰기</button>') +
+      '<div class="tabs notice-tabs print-hide" role="tablist" aria-label="공지와 회의록">' + tabBtn('notice', '공지') + tabBtn('meet', '회의록') + '</div>' +
+      '<div id="notice-body" class="stack">' + loadingHtml(meet ? '회의록을 불러오는 중이에요' : '공지를 불러오는 중이에요') + '</div>';
+    if (meet) return loadMeetings();
     loadNotices().then(function () {
       if (S.notice.openNew) { S.notice.openNew = false; openNoticeForm(null); }
     });
@@ -3588,7 +3655,7 @@
   function loadNotices() {
     return new Promise(function (resolve) {
       loadMemo('notice.list', {}, function (d) {
-        if (S.screen !== 'notice') return resolve();
+        if (S.screen !== 'notice' || S.notice.tab !== 'notice') return resolve();
         S.notice.data = d;
         drawNotices();
         markNoticesSeen(d.items);
@@ -3638,7 +3705,7 @@
       '<h2 id="m-title">' + esc(n.title) + '</h2>' + (n.body ? '<p class="help-text">' + esc(n.body) + '</p>' : '') +
       '<p class="faint" style="margin:0">' + esc(noticeMeta(n)) + '</p>' +
       '<div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button>' +
-      '<button type="button" class="btn" data-go="notice">공지 모두 보기</button>' + (n.link ? linkBtn(n.link, true, '링크 열기') : '') + '</div>');
+      '<button type="button" class="btn" data-action="notice-all">공지 모두 보기</button>' + (n.link ? linkBtn(n.link, true, '링크 열기') : '') + '</div>');
   }
 
   function openNoticeForm(edit) {
@@ -3676,6 +3743,252 @@
         return loadNotices();
       }).catch(function (e) { busy(btn, false); err.textContent = e.message; });
     });
+  }
+
+  // ============================================================ 회의록 (공지 화면의 '회의록' 탭, 2026-10-21)
+  // - 부장회의: 교장·교감·행정실장·부서마다 한 칸, 기타 안건은 누구나 한 줄씩
+  // - 교직원회의: 연수·안건 표에 누구나 항목을 더한다
+  // - 칸마다 따로 저장해서 여러 분이 함께 써도 서로 덮어쓰지 않는다
+  S.meet = { data: null, openId: '', term: '', kind: '' };
+
+  function meetThen() { return [['meet.list', {}]]; }
+
+  function loadMeetings() {
+    loadMemo('meet.list', {}, function (d) {
+      if (S.screen !== 'notice' || S.notice.tab !== 'meet') return;
+      S.meet.data = d;
+      drawMeetings();
+    }, function (e) { var b = qs('#notice-body'); if (b) b.innerHTML = failHtml(e); });
+  }
+
+  function meetById(id) {
+    return ((S.meet.data && S.meet.data.items) || []).filter(function (m) { return m.id === id; })[0] || null;
+  }
+
+  function meetWhen(m) {
+    return [m.date ? mdw(m.date) + (m.date.slice(0, 4) !== (S.meet.data.today || '').slice(0, 4) ? ' · ' + m.date.slice(0, 4) + '년' : '') : '', m.time, m.place].filter(Boolean).join(' · ');
+  }
+
+  function meetKindChip(m) {
+    return '<span class="chip' + (m.kind === '부장회의' ? ' chip-accent' : '') + '">' + esc(m.kind) + '</span>';
+  }
+
+  function drawMeetings() {
+    var M = S.meet, d = M.data, body = qs('#notice-body');
+    if (!body || !d) return;
+    var open = M.openId && meetById(M.openId);
+    if (open) return drawMeeting(open);
+    M.openId = '';
+    var terms = [];
+    d.items.forEach(function (m) { var k = m.year + '|' + m.term; if (terms.indexOf(k) < 0) terms.push(k); });
+    terms.sort().reverse();
+    if (M.term && terms.indexOf(M.term) < 0) M.term = '';
+    var list = d.items.filter(function (m) { return (!M.term || m.year + '|' + m.term === M.term) && (!M.kind || m.kind === M.kind); });
+    var kindBtn = function (v, label) { return '<button type="button" data-action="meet-kind" data-v="' + v + '" aria-pressed="' + (M.kind === v) + '">' + label + '</button>'; };
+    body.innerHTML = '<div class="meet-bar print-hide">' +
+      '<select id="meet-term" class="input" aria-label="학기"><option value="">모든 학기</option>' + terms.map(function (k) {
+        var p = k.split('|');
+        return '<option value="' + esc(k) + '"' + (M.term === k ? ' selected' : '') + '>' + esc(p[0] + '학년도 ' + p[1]) + '</option>';
+      }).join('') + '</select>' +
+      '<div class="seg" role="group" aria-label="회의 종류">' + kindBtn('', '모두') + kindBtn('부장회의', '부장회의') + kindBtn('교직원회의', '교직원회의') + '</div>' +
+      (d.canCreate ? '<button type="button" class="btn btn-primary" data-action="meet-new">' + icon('plus', 18) + '새 회의</button>' : '') + '</div>' +
+      (list.length ? '<div class="meet-list">' + list.map(function (m) {
+        var tag = m.kind === '부장회의' && !m.imported ? (m.missing ? '<span class="chip chip-warn">아직 안 쓴 부서 ' + m.missing + '곳</span>' : '<span class="chip chip-ok">모두 썼어요</span>') : '';
+        return '<button type="button" class="card meet-item" data-action="meet-open" data-id="' + esc(m.id) + '">' +
+          '<span class="sv-chips">' + meetKindChip(m) + tag + '</span>' +
+          '<span class="meet-item-t">' + esc(m.title) + '</span><span class="faint">' + esc(meetWhen(m)) + '</span></button>';
+      }).join('') + '</div>' : '<div class="card"><p class="empty">' + (d.items.length ? '고른 학기·종류의 회의가 없어요.' : '아직 회의록이 없어요.' + (d.canCreate ? ' "새 회의"로 첫 회의를 만들어 보세요.' : ' 교무기획부에서 회의를 만들면 여기에 보여요.')) + '</p></div>') +
+      '<p class="hint">' + icon('info', 16) + '<span>부장회의는 부서마다 자기 칸에, 교직원회의는 누구나 연수·안건 항목을 더해 적어요. 칸마다 따로 저장돼서 여러 분이 함께 써도 괜찮아요.</span></p>';
+    var sel = qs('#meet-term');
+    if (sel) sel.addEventListener('change', function () { M.term = sel.value; drawMeetings(); });
+  }
+
+  function meetEditBtns(m) {
+    return m.canEdit ? '<span class="row-btns print-hide"><button type="button" class="btn btn-sm btn-ghost-danger" data-action="meet-del" data-id="' + esc(m.id) + '">회의 지우기</button>' +
+      '<button type="button" class="btn btn-sm" data-action="meet-edit" data-id="' + esc(m.id) + '">날짜·장소 고치기</button></span>' : '';
+  }
+
+  function drawMeeting(m) {
+    var body = qs('#notice-body');
+    var head = '<div class="meet-top print-hide"><button type="button" class="btn btn-sm" data-action="meet-back">' + icon('chevl', 18) + '회의 목록</button>' + meetEditBtns(m) + '</div>' +
+      '<article class="card meet-doc"><div class="sv-chips">' + meetKindChip(m) + (m.imported ? '<span class="chip">예전 시트에서 옮김</span>' : '') + '</div>' +
+      '<h2>' + esc(m.title) + '</h2><p class="faint">' + esc(meetWhen(m)) + '</p>';
+    body.innerHTML = head + (m.kind === '부장회의' ? meetBoardHtml(m) : meetStaffHtml(m)) + '</article>';
+  }
+
+  function meetLineHtml(m, l, opt) {
+    return '<div class="meet-line"><div class="meet-line-t help-text">' + esc(l.text) + '</div>' +
+      '<div class="meet-line-f"><span class="faint">' + esc(l.by || '') + '</span>' +
+      '<span class="row-btns print-hide">' + (opt && opt.move && m.canEdit ? '<button type="button" class="btn btn-sm" data-action="meet-move" data-id="' + esc(l.id) + '" data-dir="-1" aria-label="위로">' + icon('up', 16) + '</button>' +
+        '<button type="button" class="btn btn-sm" data-action="meet-move" data-id="' + esc(l.id) + '" data-dir="1" aria-label="아래로">' + icon('chevd', 16) + '</button>' : '') +
+      (l.canEdit ? '<button type="button" class="btn btn-sm btn-ghost-danger" data-action="meet-line-del" data-id="' + esc(l.id) + '">지우기</button>' +
+        '<button type="button" class="btn btn-sm" data-action="meet-line-edit" data-id="' + esc(l.id) + '">고치기</button>' : '') + '</span></div></div>';
+  }
+
+  function meetBoardHtml(m) {
+    return '<div class="meet-board" role="table" aria-label="부서별 내용"><div class="meet-tr meet-th" role="row"><div role="columnheader">부서</div><div role="columnheader">내용</div></div>' +
+      m.rows.map(function (r) {
+        if (r.many) {
+          return '<div class="meet-tr" role="row"><div class="meet-k" role="rowheader">' + esc(r.name) + '</div><div class="meet-v" role="cell">' +
+            r.lines.map(function (l) { return meetLineHtml(m, l, { move: true }); }).join('') +
+            (r.lines.length ? '' : '<p class="faint meet-none">아직 없어요</p>') +
+            (r.canAdd ? '<button type="button" class="btn btn-sm print-hide" data-action="meet-line-new" data-slot="기타" style="align-self:flex-start">' + icon('plus', 16) + '한 줄 더하기</button>' : '') + '</div></div>';
+        }
+        var has = !!String(r.text || '').trim();
+        return '<div class="meet-tr' + (has ? '' : ' meet-empty') + '" role="row"><div class="meet-k" role="rowheader">' + esc(r.name) + '</div><div class="meet-v" role="cell">' +
+          (has ? '<div class="help-text">' + esc(r.text) + '</div>' : '<p class="faint meet-none">아직 안 썼어요</p>') +
+          ((has && r.by) || r.canEdit ? '<div class="meet-line-f"><span class="faint">' + (has ? esc(r.by) : '') + '</span>' +
+            (r.canEdit ? '<button type="button" class="btn btn-sm print-hide" data-action="meet-slot" data-slot="' + esc(r.key) + '">' + (has ? '고치기' : '적기') + '</button>' : '') + '</div>' : '') +
+          '</div></div>';
+      }).join('') + '</div>';
+  }
+
+  function meetStaffHtml(m) {
+    var table = function (slot, title, noteLabel, lines) {
+      return '<section class="meet-sec"><h3>' + title + ' <span class="faint">' + lines.length + '</span></h3>' +
+        (lines.length ? '<div class="table-wrap"><table class="plan meet-tbl"><thead><tr><th class="c-n">순</th><th>내용</th><th class="c-who">담당</th><th class="c-note">' + noteLabel + '</th><th class="print-hide"></th></tr></thead><tbody>' +
+          lines.map(function (l, i) {
+            return '<tr><td class="c-n">' + (i + 1) + '</td><td class="help-text">' + esc(l.text) + '</td><td>' + esc(l.who) + '</td><td>' + esc(l.note) + '</td>' +
+              '<td class="print-hide"><span class="row-btns meet-acts">' + (m.canEdit ? '<button type="button" class="btn btn-sm" data-action="meet-move" data-id="' + esc(l.id) + '" data-dir="-1" aria-label="위로"' + (i ? '' : ' disabled') + '>' + icon('up', 16) + '</button>' +
+                '<button type="button" class="btn btn-sm" data-action="meet-move" data-id="' + esc(l.id) + '" data-dir="1" aria-label="아래로"' + (i < lines.length - 1 ? '' : ' disabled') + '>' + icon('chevd', 16) + '</button>' : '') +
+              (l.canEdit ? '<button type="button" class="btn btn-sm" data-action="meet-line-edit" data-id="' + esc(l.id) + '">고치기</button>' +
+                '<button type="button" class="btn btn-sm btn-ghost-danger" data-action="meet-line-del" data-id="' + esc(l.id) + '">지우기</button>' : '') + '</span>' +
+              (l.by ? '<span class="faint meet-by">' + esc(l.by) + '</span>' : '') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' : '<p class="faint meet-none">아직 없어요</p>') +
+        (S.me ? '<button type="button" class="btn btn-sm print-hide" data-action="meet-line-new" data-slot="' + slot + '" style="align-self:flex-start">' + icon('plus', 16) + '항목 더하기</button>' : '') + '</section>';
+    };
+    return table('연수', '연수', '연수 시간', m.training) + table('안건', '안건', '비고', m.agenda);
+  }
+
+  function meetLineById(m, id) {
+    var all = m.kind === '부장회의' ? (m.rows.filter(function (r) { return r.many; })[0] || { lines: [] }).lines : m.training.concat(m.agenda);
+    return all.filter(function (l) { return l.id === id; })[0] || null;
+  }
+
+  function meetSaved(msg) {
+    closeModal();
+    toast(msg);
+    loadMeetings();
+  }
+
+  /** 부장회의의 한 칸(교장·교감·행정실장·부서) 쓰기 */
+  function openMeetSlot(m, key) {
+    var r = m.rows.filter(function (x) { return x.key === key; })[0];
+    if (!r || !needMe('회의록을 쓰면')) return;
+    openModal('<h2 id="m-title">' + esc(r.name) + '</h2><p class="faint" style="margin:0">' + esc(m.title) + '</p>' +
+      '<form class="form" id="meet-slot-form" novalidate><div class="field"><label class="label" for="ms-text">내용</label>' +
+      '<textarea id="ms-text" class="input" rows="9" maxlength="3000" placeholder="- 전달할 내용을 한 줄씩 적어 주세요">' + esc(r.text || '') + '</textarea></div>' +
+      '<p class="hint">' + icon('info', 16) + '<span>이 칸만 저장돼요. 다른 부서가 함께 써도 덮어쓰지 않아요. 모두 지우고 저장하면 칸이 비어요.</span></p>' +
+      '<p class="err" id="ms-err" role="alert"></p><div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="submit" class="btn btn-primary">저장</button></div></form>', { wide: true });
+    qs('#meet-slot-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var btn = ev.target.querySelector('[type=submit]');
+      busy(btn, true, '저장하는 중');
+      server('meet.entry.save', { meetId: m.id, slot: key, text: qs('#ms-text').value }, meetThen())
+        .then(function () { meetSaved('저장했어요'); })
+        .catch(function (e) { busy(btn, false); qs('#ms-err').textContent = e.message; });
+    });
+    qs('#ms-text').focus();
+  }
+
+  /** 여러 줄 항목(기타 안건·연수·안건) 더하기·고치기 */
+  function openMeetLine(m, slot, line) {
+    if (!needMe('회의록을 쓰면')) return;
+    var staff = m.kind === '교직원회의';
+    var title = slot === '기타' ? '기타 안건' : slot;
+    var l = line || {};
+    openModal('<h2 id="m-title">' + esc(title) + (line ? ' 고치기' : ' 더하기') + '</h2><p class="faint" style="margin:0">' + esc(m.title) + '</p>' +
+      '<form class="form" id="meet-line-form" novalidate><div class="field"><label class="label" for="ml-text">내용 <span class="req">*</span></label>' +
+      '<textarea id="ml-text" class="input" rows="' + (staff ? 3 : 5) + '" maxlength="3000">' + esc(l.text || '') + '</textarea></div>' +
+      (staff ? '<div class="form-grid"><div class="field"><label class="label" for="ml-who">담당</label><input id="ml-who" class="input" maxlength="30" value="' + esc(line ? l.who || '' : (S.me && S.me.dept) || '') + '"></div>' +
+        '<div class="field"><label class="label" for="ml-note">' + (slot === '연수' ? '연수 시간' : '비고') + '</label><input id="ml-note" class="input" maxlength="60" value="' + esc(l.note || '') + '" placeholder="' + (slot === '연수' ? '예: 20분' : '예: 준비물') + '"></div></div>' : '') +
+      '<p class="err" id="ml-err" role="alert"></p><div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="submit" class="btn btn-primary">' + (line ? '저장' : '더하기') + '</button></div></form>');
+    qs('#meet-line-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var err = qs('#ml-err'), text = qs('#ml-text').value;
+      if (!text.trim()) { err.textContent = '내용을 적어 주세요.'; qs('#ml-text').focus(); return; }
+      var btn = ev.target.querySelector('[type=submit]');
+      busy(btn, true, '저장하는 중');
+      server('meet.entry.save', { meetId: m.id, slot: slot, id: line ? line.id : '', text: text, who: staff ? qs('#ml-who').value : '', note: staff ? qs('#ml-note').value : '' }, meetThen())
+        .then(function () { meetSaved(line ? '고쳤어요' : '더했어요'); })
+        .catch(function (e) { busy(btn, false); err.textContent = e.message; });
+    });
+    qs('#ml-text').focus();
+  }
+
+  /** 새 회의·날짜 고치기 */
+  function openMeetForm(edit) {
+    if (!needMe('회의를 만들면')) return;
+    var d = S.meet.data;
+    if (!d) return;
+    var kind = edit ? edit.kind : '부장회의';
+    var kb = function (v) { return '<button type="button" data-v="' + v + '" aria-pressed="' + (kind === v) + '">' + v + '</button>'; };
+    openModal('<h2 id="m-title">' + (edit ? '날짜·장소 고치기' : '새 회의') + '</h2>' +
+      '<form class="form" id="meet-form" novalidate>' +
+      (edit ? '<p class="faint" style="margin:0">' + esc(edit.title) + '</p>' : '<div class="field"><span class="label">회의 종류</span><div class="seg" id="mf-kind" role="group" aria-label="회의 종류">' + kb('부장회의') + kb('교직원회의') + '</div></div>') +
+      '<div class="form-grid"><div class="field"><label class="label" for="mf-date">날짜 <span class="req">*</span></label><input id="mf-date" class="input" type="date" value="' + esc(edit ? edit.date : d.today) + '"></div>' +
+      '<div class="field"><label class="label" for="mf-time">시간</label><input id="mf-time" class="input" maxlength="20" value="' + esc(edit ? edit.time || '' : '15:00') + '" placeholder="예: 15:00"></div></div>' +
+      '<div class="field"><label class="label" for="mf-place">장소</label><input id="mf-place" class="input" maxlength="40" value="' + esc(edit ? edit.place || '' : '') + '" placeholder="예: 교무실"></div>' +
+      '<p class="hint">' + icon('info', 16) + '<span>' + (edit ? '함께 넣은 일정의 날짜·시간·장소도 같이 고쳐요.' : '부장회의 회차는 학기마다 저절로 매겨요. 만들면 일정에도 \'회의\'로 함께 들어가요.') + '</span></p>' +
+      '<p class="err" id="mf-err" role="alert"></p><div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="submit" class="btn btn-primary">' + (edit ? '저장' : '만들기') + '</button></div></form>');
+    var seg = qs('#mf-kind');
+    if (seg) seg.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-v]');
+      if (!b) return;
+      kind = b.getAttribute('data-v');
+      qsa('#mf-kind button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    });
+    qs('#meet-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var err = qs('#mf-err'), date = qs('#mf-date').value;
+      if (!date) { err.textContent = '날짜를 골라 주세요.'; return; }
+      var btn = ev.target.querySelector('[type=submit]');
+      busy(btn, true, '저장하는 중');
+      server('meet.save', { id: edit ? edit.id : '', kind: kind, date: date, time: qs('#mf-time').value, place: qs('#mf-place').value }, meetThen()).then(function (r) {
+        S.home = null;
+        S.meet.openId = r.id;
+        meetSaved(edit ? '고쳤어요' : '회의를 만들었어요');
+      }).catch(function (e) { busy(btn, false); err.textContent = e.message; });
+    });
+  }
+
+  function meetAction(a, t, id) {
+    var m = meetById(S.meet.openId);
+    switch (a) {
+      case 'meet-open':
+        S.meet.openId = id;
+        if (S.screen === 'notice' && S.notice.tab === 'meet' && S.meet.data) { drawMeetings(); window.scrollTo(0, 0); }
+        else { S.notice.tab = 'meet'; go('notice'); }
+        break;
+      case 'meet-back': S.meet.openId = ''; drawMeetings(); window.scrollTo(0, 0); break;
+      case 'meet-kind': S.meet.kind = t.getAttribute('data-v'); drawMeetings(); break;
+      case 'meet-new': openMeetForm(null); break;
+      case 'meet-edit': openMeetForm(meetById(id)); break;
+      case 'meet-del':
+        var md0 = meetById(id);
+        if (!md0) return;
+        confirmBox('회의 지우기', '"' + esc(md0.title) + '"와 적힌 내용을 모두 지울까요? 함께 넣은 일정도 지워요. 연구부장·부담당이 휴지통에서 되살릴 수 있어요.', '지우기', function () {
+          return server('meet.delete', { id: id }, meetThen()).then(function () { S.home = null; S.meet.openId = ''; meetSaved('회의를 지웠어요'); });
+        }, true);
+        break;
+      case 'meet-slot': if (m) openMeetSlot(m, t.getAttribute('data-slot')); break;
+      case 'meet-line-new': if (m) openMeetLine(m, t.getAttribute('data-slot'), null); break;
+      case 'meet-line-edit':
+        var le = m && meetLineById(m, id);
+        if (le) openMeetLine(m, le.slot, le);
+        break;
+      case 'meet-line-del':
+        var ld = m && meetLineById(m, id);
+        if (!ld) return;
+        confirmBox('항목 지우기', '"' + esc(ld.text.slice(0, 40)) + '" 항목을 지울까요?', '지우기', function () {
+          return server('meet.entry.delete', { id: id }, meetThen()).then(function () { meetSaved('지웠어요'); });
+        }, true);
+        break;
+      case 'meet-move':
+        t.disabled = true;
+        server('meet.entry.move', { id: id, dir: Number(t.getAttribute('data-dir')) }, meetThen()).then(loadMeetings).catch(function (e) { t.disabled = false; toast(e.message); });
+        break;
+    }
   }
 
   /** 홈 공지 카드 */
@@ -4245,7 +4558,7 @@
     'sched.month': '일정(달력)', 'sched.year': '연간 학사일정', 'sched.save': '일정 저장', 'sched.delete': '일정 지우기', 'focus.save': '중점지도 저장',
     'students.save': '학생 수 저장', 'survey.list': '조사 목록', 'survey.get': '조사 보기', 'survey.respond': '조사 응답', 'survey.save': '조사 만들기·고치기',
     'lib.list': '자료실', 'lib.save': '자료 넣기·고치기', 'lib.delete': '자료 지우기', 'notice.list': '공지', 'notice.save': '공지 쓰기·고치기',
-    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', batch: '미리 받기(뒤에서)',
+    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', 'meet.list': '회의록', 'meet.save': '회의 만들기·고치기', 'meet.delete': '회의 지우기', 'meet.entry.save': '회의록 쓰기', 'meet.entry.delete': '회의록 항목 지우기', 'meet.entry.move': '회의록 순서 바꾸기', 'admin.meet.preview': '회의록 가져오기 미리보기', 'admin.meet.import': '회의록 가져오기', batch: '미리 받기(뒤에서)',
     'sched.upload.info': '학사일정 올리기 화면', 'sched.upload.check': '학사일정 미리보기', 'sched.upload.save': '학사일정 올리기',
     'admin.cache.clear': '시트 새로 읽기', 'admin.settings.get': '설정(관리자)', 'admin.log.list': '수정 기록', 'survey.remind': '다시 알리기'
   };
@@ -4463,6 +4776,7 @@
     if (t.hasAttribute('data-go')) {
       if (t.getAttribute('data-go') === 'schedule' && S.screen === 'home') S.sched.view = 'cal';
       if (t.getAttribute('data-go') === 'table' && TB) TB.reset(); // 메뉴를 누르면 표 목록부터
+      if (t.getAttribute('data-go') === 'notice' && S.screen !== 'notice') S.notice.tab = 'notice'; // 메뉴로 들어오면 공지부터
       go(t.getAttribute('data-go'));
       return;
     }
@@ -4677,8 +4991,18 @@
       case 'up-undo': uploadUndo(); break;
       case 'up-again': S.up.done = null; S.up.res = null; drawUpload(); break;
       case 'notice-new':
-        if (S.screen === 'notice' && S.notice.data) openNoticeForm(null);
-        else if (needMe('공지를 쓰면')) { S.notice.openNew = true; go('notice'); }
+        if (S.screen === 'notice' && S.notice.tab === 'notice' && S.notice.data) openNoticeForm(null);
+        else if (needMe('공지를 쓰면')) { S.notice.openNew = true; S.notice.tab = 'notice'; go('notice'); }
+        break;
+      case 'notice-all': closeModal(); S.notice.tab = 'notice'; go('notice'); break;
+      case 'notice-tab':
+        S.notice.tab = t.getAttribute('data-v');
+        if (S.notice.tab === 'meet') S.meet.openId = '';
+        SCREENS.notice(qs('#screen'));
+        break;
+      case 'meet-open': case 'meet-back': case 'meet-kind': case 'meet-new': case 'meet-edit': case 'meet-del': case 'meet-slot':
+      case 'meet-line-new': case 'meet-line-edit': case 'meet-line-del': case 'meet-move':
+        meetAction(a, t, id);
         break;
       case 'notice-open': openNotice(id); break;
       case 'notice-view': S.notice.view = t.getAttribute('data-v'); drawNotices(); break;
