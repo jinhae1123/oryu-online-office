@@ -63,7 +63,7 @@
     'sched.upload.info': 1, 'sched.upload.check': 1, 'survey.list': 1, 'survey.get': 1, 'survey.csv': 1, 'lib.list': 1, 'file.get': 1,
     'help.list': 1, 'staff.list': 1, 'notice.list': 1, 'admin.settings.get': 1, 'admin.cat.list': 1, 'admin.staff.list': 1,
     'admin.log.list': 1, 'admin.trash.list': 1, 'admin.trash.surveys': 1, 'admin.trash.library': 1, 'admin.year.preview': 1,
-    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1,
+    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1, 'admin.site.preview': 1,
     'ui.table': 1, 'table.list': 1, 'table.get': 1, 'table.poll': 1, 'table.find': 1, 'table.tpl.list': 1, 'table.tpl.get': 1, 'admin.trash.tables': 1
   };
   // 취합 시트에서 칸·열 너비·줄 높이·보기를 고치는 저장: 창 닫기를 막지 않는다(뒤에서 차례로 보냄)
@@ -2549,16 +2549,28 @@
       '<div class="seg" role="group" aria-label="자료 보기">' +
       '<button type="button" data-action="lib-view" data-v="now" aria-pressed="' + (L.view === 'now') + '">' + esc(d.year) + '학년도</button>' +
       '<button type="button" data-action="lib-view" data-v="archive" aria-pressed="' + (L.view === 'archive') + '">' + icon('archive', 18) + '보관함</button></div>' +
-      '<select class="input input-sm" id="lib-dept" aria-label="부서로 거르기">' + opt(d.depts, L.dept, '모든 부서') + '</select>' +
       '<select class="input input-sm" id="lib-kind" aria-label="분류로 거르기">' + opt(d.kinds, L.kind, '모든 분류') + '</select></div>' +
+      libDeptTabs() +
       (L.view === 'archive' && years.length ? '<div class="tgs print-hide" role="group" aria-label="학년도">' + years.map(function (y) {
         return '<button type="button" class="tg" data-action="lib-year" data-y="' + esc(y) + '" aria-pressed="' + (y === L.year) + '">' + esc(y) + '학년도</button>';
       }).join('') + '</div>' : '') +
       '<div id="lib-list" class="stack"></div>';
     bindFind('lib-q', function (v) { L.q = v; drawLibList(); });
-    qs('#lib-dept').addEventListener('change', function (e) { L.dept = e.target.value; drawLibList(); });
     qs('#lib-kind').addEventListener('change', function (e) { L.kind = e.target.value; drawLibList(); });
     drawLibList();
+  }
+
+  /** 부서 탭(관리자 화면 부서 목록 순서). '사용 안 함' 부서는 이 보기에 그 부서 자료가 있을 때만 */
+  function libDeptTabs() {
+    var L = S.lib, d = L.data;
+    var used = {};
+    d.items.forEach(function (i) { if (L.view === 'now' ? !i.archived : i.archived && i.year === L.year) used[i.deptId] = true; });
+    var depts = d.depts.filter(function (dp) { return dp.active || used[dp.id]; });
+    if (L.dept && !depts.some(function (dp) { return dp.id === L.dept; })) L.dept = '';
+    if (!depts.length) return '';
+    return '<div class="tgs print-hide" role="group" aria-label="부서">' + [{ id: '', name: '전체' }].concat(depts).map(function (dp) {
+      return '<button type="button" class="tg" data-action="lib-dept" data-id="' + esc(dp.id) + '" aria-pressed="' + (L.dept === dp.id) + '">' + esc(dp.name) + '</button>';
+    }).join('') + '</div>';
   }
 
   function drawLibList() {
@@ -3091,6 +3103,43 @@
             S.lib.data = null;
             toast(r.year + '학년도로 넘겼어요. 보관 ' + r.archived + '개 · 옮김 ' + r.copied + '개');
             adminYear(panel);
+          });
+        });
+      });
+    }).catch(function (e) { panel.innerHTML = failHtml(e); });
+  }
+
+  // ------------------------------------------------------------ 관리자 · 가져오기 (종합사이트 링크)
+  function adminImport(panel) {
+    if (!panel) return;
+    panel.innerHTML = loadingHtml('넣을 링크를 살펴보는 중이에요');
+    server('admin.site.preview').then(function (p) {
+      var news = p.items.filter(function (i) { return i.state === 'new'; });
+      var stateText = { 'new': '넣음', have: '이미 있음', gone: '지운 적 있음 · 넣지 않음' };
+      var row = function (i) {
+        var tags = [i.dept || (i.deptWord ? '부서 없음(' + i.deptWord + ' 부서를 못 찾음)' : '부서 없음'), i.kind, i.common ? '공통' : '', i.home ? '홈' : ''].filter(Boolean).join(' · ');
+        return '<li class="site-item' + (i.state === 'new' ? '' : ' faint') + '"><b>' + esc(i.title) + '</b> <span class="faint">' + esc(tags) + '</span>' +
+          (i.state === 'new' ? '' : ' <span class="chip">' + stateText[i.state] + '</span>') + '</li>';
+      };
+      panel.innerHTML = '<div class="stack"><section class="card"><h2>종합사이트 링크 넣기</h2>' +
+        '<p class="muted" style="margin:0">예전 \'2026 오류교육 종합사이트\'의 링크를 ' + esc(p.year) + '학년도 자료실 카드로 옮겨요. 누르면 원래 사이트·시트가 바로 열려요.</p>' +
+        '<ul class="guide-list">' +
+        '<li>같은 주소의 자료가 이미 있거나 지운 적이 있으면 넣지 않아요. 여러 번 눌러도 괜찮아요.</li>' +
+        '<li>부서는 이름으로 찾아 넣어요. 못 찾은 것은 \'부서 없음\'에 들어가니 자료실에서 고쳐 주세요.</li>' +
+        (p.newKinds.length ? '<li>자료 분류 ' + p.newKinds.map(function (k) { return '\'' + esc(k) + '\''; }).join(', ') + '을(를) 새로 만들어요.</li>' : '') +
+        '<li>넣은 뒤에는 자료실에서 보통 자료처럼 고치거나 지울 수 있어요.</li></ul>' +
+        '<ul class="site-list">' + p.items.map(row).join('') + '</ul>' +
+        '<p class="err" id="site-err" role="alert"></p>' +
+        (news.length ? '<button type="button" class="btn btn-primary" id="site-go" style="align-self:flex-start">링크 ' + news.length + '개 넣기</button>'
+          : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section></div>';
+      var go = qs('#site-go');
+      if (go) go.addEventListener('click', function () {
+        confirmBox('링크 ' + news.length + '개를 넣을까요?', esc(p.year) + '학년도 자료실에 종합사이트 링크 ' + news.length + '개를 카드로 넣어요.', '넣기', function () {
+          return server('admin.site.import').then(function (r) {
+            closeModal();
+            S.lib.data = null;
+            toast('자료실에 링크 ' + r.added + '개를 넣었어요');
+            adminImport(panel);
           });
         });
       });
@@ -3643,7 +3692,7 @@
   // ============================================================ 관리자
   SCREENS.admin = function ($s) {
     if (!S.admin) return adminGate($s);
-    var tabs = [['staff', '교직원 표'], ['cat', '분류'], ['settings', '설정'], ['year', '새 학년도'], ['log', '수정 기록'], ['trash', '휴지통'], ['pw', '비밀번호'], ['check', '점검']];
+    var tabs = [['staff', '교직원 표'], ['cat', '분류'], ['settings', '설정'], ['year', '새 학년도'], ['import', '가져오기'], ['log', '수정 기록'], ['trash', '휴지통'], ['pw', '비밀번호'], ['check', '점검']];
     $s.innerHTML = pageHead('관리 · 연구부장·부담당', '관리자', '계정·분류·설정을 관리해요. 바꾼 내용은 모두 수정 기록에 남아요.',
       '<button type="button" class="btn btn-sm print-hide" data-action="admin-out">' + icon('lock', 18) + '관리자 화면 닫기</button>') +
       (S.me ? '' : '<div class="box" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px"><span class="warn-text" style="font-size:15px">본인 확인 전이라 기록에 "관리자(본인 확인 전)"으로 남아요.</span>' +
@@ -3654,7 +3703,7 @@
     var selTab = qs('.tabs [aria-selected="true"]', $s);
     if (selTab && selTab.scrollIntoView) { try { selTab.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {} }
     var panel = qs('#admin-panel');
-    ({ staff: adminStaff, cat: adminCat, settings: adminSettings, year: adminYear, log: adminLog, trash: adminTrash, pw: adminPw, check: adminCheck }[S.adminTab] || adminStaff)(panel);
+    ({ staff: adminStaff, cat: adminCat, settings: adminSettings, year: adminYear, import: adminImport, log: adminLog, trash: adminTrash, pw: adminPw, check: adminCheck }[S.adminTab] || adminStaff)(panel);
   };
 
   function adminGate($s) {
@@ -4196,7 +4245,7 @@
     'sched.month': '일정(달력)', 'sched.year': '연간 학사일정', 'sched.save': '일정 저장', 'sched.delete': '일정 지우기', 'focus.save': '중점지도 저장',
     'students.save': '학생 수 저장', 'survey.list': '조사 목록', 'survey.get': '조사 보기', 'survey.respond': '조사 응답', 'survey.save': '조사 만들기·고치기',
     'lib.list': '자료실', 'lib.save': '자료 넣기·고치기', 'lib.delete': '자료 지우기', 'notice.list': '공지', 'notice.save': '공지 쓰기·고치기',
-    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', batch: '미리 받기(뒤에서)',
+    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', batch: '미리 받기(뒤에서)',
     'sched.upload.info': '학사일정 올리기 화면', 'sched.upload.check': '학사일정 미리보기', 'sched.upload.save': '학사일정 올리기',
     'admin.cache.clear': '시트 새로 읽기', 'admin.settings.get': '설정(관리자)', 'admin.log.list': '수정 기록', 'survey.remind': '다시 알리기'
   };
@@ -4588,6 +4637,11 @@
       case 'lib-edit': closeModal(); openLibForm(libById(id)); break;
       case 'lib-view': S.lib.view = t.getAttribute('data-v'); drawLib(); break;
       case 'lib-year': S.lib.year = t.getAttribute('data-y'); drawLib(); break;
+      case 'lib-dept':
+        S.lib.dept = id || '';
+        qsa('[data-action="lib-dept"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === t)); });
+        drawLibList();
+        break;
       case 'lib-del':
         var ld = libById(id);
         confirmBox('자료 지우기', '"' + esc(ld.title) + '" 자료를 지울까요? 연구부장·부담당이 휴지통에서 되살릴 수 있어요.', '지우기', function () {

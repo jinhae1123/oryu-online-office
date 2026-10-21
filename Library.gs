@@ -345,6 +345,118 @@ function adminYearStart_(args, actor) {
   });
 }
 
+// ---------------------------------------------------------------- 종합사이트 링크 넣기 (관리자, 2026-10-21)
+//
+// 예전 '2026 오류교육 종합사이트'(구글 사이트)의 링크를 자료실 카드로 옮긴다. 한 번 넣으면 끝이고 다시 눌러도 괜찮다.
+// - 같은 학년도에 같은 주소의 자료가 있으면(지운 자료 포함) 넣지 않는다 → 지운 카드가 되살아나지 않는다
+// - 부서는 이름에 든 낱말로 찾는다('교무' → 교무기획부). 못 찾으면 '부서 없음'으로 넣고 자료실에서 고친다
+// - 자료 분류가 없으면 만든다
+// - 학사일정·월중행사(일정 화면이 대신), 부장회의록·전교직원회의 안건(회의록으로 옮길 예정), 수업 참고 사이트 등은 넣지 않는다(교사 결정)
+
+/** [제목, 주소, 부서 낱말, 자료 분류, 표시('홈'|'공통'|''), 설명] */
+function siteLinkDefs_() {
+  var S = '업무 사이트', D = '학교 문서', E = '교육청', R = '참고 자료';
+  return [
+    ['업무포털', 'https://sen.eduptl.kr/bpm_lgn_lg00_001.do', '', S, '홈', ''],
+    ['e알리미', 'https://www.ealimi.com/Member/SignIn', '', S, '홈', ''],
+    ['스쿨북(태블릿·특별실 예약)', 'https://schoolbook.zzolab.com/58x6ppib3bgtd', '', S, '홈', ''],
+    ['인디스쿨', 'https://indischool.com/', '', R, '', ''],
+    ['ssem 서울교육포털', 'https://www.ssem.or.kr/index.do?sso=ok#anchor1', '', S, '', ''],
+    ['국가기초학력지원포털', 'https://www.basics.go.kr/bgportal/main', '', S, '', '기초학력'],
+    ['학교안전공제회', 'https://www.schoolsafe.or.kr', '', S, '', '보건'],
+    ['예전 종합사이트(2026 오류교육)', 'https://sites.google.com/oryu.sen.es.kr/2026edu/', '', S, '공통', '옮기는 동안만 써요. 다 옮기면 지워 주세요.'],
+    ['전체 시간표(교과전담·특별실 포함)', 'https://docs.google.com/spreadsheets/d/161qMTzkAJqTclOCKjAIiVoansEsP75QxixF7qOQ677E/edit?usp=sharing', '교육과정', D, '홈', ''],
+    ['교육과정부 예산', 'https://docs.google.com/spreadsheets/d/1eYRi3rnaVY9u12rxzWe10Nxkdq9nPTH1-V7WQqfXjr4/edit?usp=sharing', '교육과정', D, '', ''],
+    ['교실 배치도', 'https://docs.google.com/spreadsheets/d/1U7ijHX8PCCYDvcDiySXVPeYLmqKjPSRQDplXKa13FFk/edit?usp=sharing', '교육과정', D, '', ''],
+    ['학교 업무 조직', 'https://docs.google.com/spreadsheets/d/1WTB38ZXLKvqQLcOGrWr3rZVtBFnidHm4o53enSeJVrg/edit?usp=sharing', '교육과정', D, '공통', ''],
+    ['교과시간 운영', 'https://docs.google.com/spreadsheets/d/1hY07Pj6uOUYlFT4RK0FuqODyZ85CIfr-ejdEkqHXoUw/edit?usp=sharing', '교육과정', D, '', ''],
+    ['2026 학교교육과정', 'https://drive.google.com/file/d/1Fp6r6veFoRQxiojDj_4RQI3TsdWUfKix/view?usp=sharing', '교육과정', D, '', ''],
+    ['2026 학년교육과정', 'https://drive.google.com/drive/folders/1WXE779DYWCG6Ca2nnxJIwpMlnwFt2XXr?usp=sharing', '교육과정', D, '', '드라이브 폴더'],
+    ['교내 전화번호', 'https://docs.google.com/spreadsheets/d/1CqGxIoKiH4pKjlWtuSYi1Sa5x9PN8392GMgp_2cuwuk/edit?usp=sharing', '교육과정', D, '공통', ''],
+    ['위임 전결 규정', 'https://docs.google.com/spreadsheets/d/1uWkAjP1sy1W8Q81d2vF6YTmmqbjTcPQ7_hj3CP7SEBo/edit?usp=sharing', '교육과정', D, '', ''],
+    ['학교시설 고장·안전 신고', 'https://docs.google.com/spreadsheets/d/1k1wO-ZmBeWpfh-lam0XRO8dGQ8CKNv1JngpCME6gnmc/edit?usp=sharing', '교육과정', D, '', ''],
+    ['오류교육 건의함', 'https://docs.google.com/forms/d/e/1FAIpQLSdfsiM54ir9TkZKXxp1_-eCxt1HUdfgvvOI5WTvlcGZK5ybfg/viewform?usp=dialog', '교육과정', D, '', '구글 설문'],
+    ['2026 주요예산', 'https://docs.google.com/spreadsheets/d/1aqniDxlUNYgg6ol3YegOrph7HBYs4MytkTo51CwKz38/edit?usp=sharing', '', D, '', ''],
+    ['교직원 법정의무교육', 'https://docs.google.com/spreadsheets/d/1k1q8MmfXKsJflgLNVcGJPuR-GOeb5Bu9a2SyHCzhuSE/edit?usp=sharing', '연구', D, '', ''],
+    ['과학실 이용 시간표', 'https://docs.google.com/spreadsheets/d/1qavoNTnET5KytvBDgFUyWIt6-F-wP2nAKzAKKUpiAIc/edit?usp=sharing', '과학', D, '', ''],
+    ['안전점검의 날', 'https://docs.google.com/spreadsheets/d/1ARbSWR22mK-uqGvsiNsJAC9vUMk_G53MF7t5nOP7BCM/edit?usp=sharing', '생활', D, '', ''],
+    ['지원사 시간표', 'https://docs.google.com/spreadsheets/d/1Nxzq-R03Zk7ZVz-Tat2BKmP6rOkZU4mfN6suIRjldnU/edit?usp=sharing', '생활', D, '', ''],
+    ['에듀테크 도움자료', 'https://www.notion.so/2026-4-3-16370f90038f82e1ab6e01cc6b9b0244?source=copy_link', '정보', R, '', '노션'],
+    ['소프트웨어 선정 목록', 'https://docs.google.com/spreadsheets/d/1gMKbhXbWDxw-4_yv15v9Ktnv8k6bSpis/edit?usp=sharing', '정보', D, '', ''],
+    ['방과후학교 시간표', 'https://docs.google.com/spreadsheets/d/1IlJeSvnAwRr-xBp_RBfgod0keXL4u-lnAvJVWQtVJ2o/edit?usp=sharing', '', D, '', '방과후'],
+    ['초등교육과 부서업무방', 'https://buseo.sen.go.kr/buseo/bu12/user/bbs/BD_selectBbsList.do?q_bbsSn=1266', '', E, '', '서울시교육청'],
+    ['창의미래교육과 부서업무방', 'https://buseo.sen.go.kr/buseo/bu10/user/bbs/BD_selectBbsList.do?q_bbsSn=1240', '', E, '', '서울시교육청'],
+    ['민주시민교육과 부서업무방', 'https://buseo.sen.go.kr/buseo/bu15/user/bbs/BD_selectBbsList.do?q_bbsSn=1331', '', E, '', '서울시교육청'],
+    ['학생역량혁신교육과 부서업무방', 'https://buseo.sen.go.kr/buseo/bu28/user/bbs/BD_selectBbsList.do?q_bbsSn=1454', '', E, '', '서울시교육청'],
+    ['남부 지역연계프로그램 목록', 'https://docs.google.com/spreadsheets/d/1MztKiYgOVr5McbeeYjddHbDKK84hkreW/edit?usp=sharing&ouid=111548430109163', '', E, '', '남부교육지원청'],
+    ['남부 지역 자원 목록', 'https://drive.google.com/file/d/1WW1LIBvSEm-ykiVXbwaJuj5t0wqQZ1lD/view?usp=drive_link', '', E, '', '남부교육지원청'],
+    ['사회정서교육 자료', 'https://padlet.com/seoulweecenter/2026-5t6vurtu2xpfskdh', '', E, '', '패들렛'],
+    ['생태전환교육 자료', 'https://padlet.com/ECO_SEN/padlet-1gtnlu2h4wq6on5i', '', E, '', '패들렛'],
+    ['초1 인성교육 집중학년 운영 자료집', 'https://onlinebooks.co.kr/books/vvza/#p=1', '', E, '', '1학년']
+  ];
+}
+
+/** 부서 낱말 → 부서ID(사용 안 함 포함, 순서대로 처음 맞는 것). 못 찾으면 '' */
+function siteDeptId_(word, depts) {
+  if (!word) return '';
+  for (var i = 0; i < depts.length; i++) if (depts[i].name.indexOf(word) >= 0) return depts[i].id;
+  return '';
+}
+
+/** 넣을 목록과 각 줄의 처지(new 넣음 · have 이미 있음 · gone 지운 적 있음) */
+function siteLinkPlan_() {
+  var year = libYear_();
+  var depts = deptOptions_();
+  var deptName = {};
+  depts.forEach(function (d) { deptName[d.id] = d.name; });
+  var kinds = {};
+  liveRows_('분류').forEach(function (r) { if (r['종류'] === '자료 분류') kinds[r['이름']] = r['분류ID']; });
+  var seen = {};
+  readRows_('자료').forEach(function (r) {
+    if (String(r['학년도'] || year) !== String(year) || !r['링크']) return;
+    var st = r['삭제 여부'] ? 'gone' : 'have';
+    if (seen[r['링크']] !== 'have') seen[r['링크']] = st;
+  });
+  var items = siteLinkDefs_().map(function (x) {
+    var deptId = siteDeptId_(x[2], depts);
+    return {
+      title: x[0], link: x[1], deptId: deptId, dept: deptName[deptId] || '', deptWord: x[2], kind: x[3],
+      home: x[4] === '홈', common: x[4] === '공통', desc: x[5], state: seen[x[1]] || 'new'
+    };
+  });
+  var newKinds = [];
+  ['업무 사이트', '학교 문서', '교육청', '참고 자료'].forEach(function (k) { // 새로 만드는 분류는 이 순서로
+    if (!kinds[k] && items.some(function (i) { return i.state === 'new' && i.kind === k; })) newKinds.push(k);
+  });
+  return { year: year, items: items, kinds: kinds, newKinds: newKinds };
+}
+
+function adminSiteLinksPreview_() {
+  var p = siteLinkPlan_();
+  return { year: p.year, items: p.items, newKinds: p.newKinds };
+}
+
+function adminSiteLinksImport_(args, actor) {
+  return withLock_(function () {
+    ensureCols_('자료');
+    var p = siteLinkPlan_();
+    var order = liveRows_('분류').filter(function (r) { return r['종류'] === '자료 분류'; })
+      .reduce(function (m, r) { return Math.max(m, Number(r['순서']) || 0); }, 0);
+    p.newKinds.forEach(function (name) {
+      order++;
+      p.kinds[name] = insertRow_('분류', { '종류': '자료 분류', '이름': name, '순서': String(order), '사용 여부': '사용' }, actor, '자료 분류 "' + name + '" 추가(종합사이트 링크)')['분류ID'];
+    });
+    var add = p.items.filter(function (i) { return i.state === 'new'; }).map(function (i) {
+      return {
+        '학년도': p.year, '분류ID': p.kinds[i.kind] || '', '부서ID': i.deptId, '제목': i.title, '설명': i.desc, '링크': i.link,
+        '담당': '', '보관 여부': '', '홈에 보이기': i.home ? '예' : '', '공통': i.common ? '예' : '', '공통 순서': ''
+      };
+    });
+    insertRows_('자료', add, actor, '종합사이트 링크 ' + add.length + '개 자료실에 넣음');
+    return { added: add.length, skipped: p.items.length - add.length, newKinds: p.newKinds };
+  });
+}
+
 // ---------------------------------------------------------------- 테스트용 가짜 자료·도움말
 
 /** 가짜 자료 10개(공통 3개, 1개는 지난 학년도 보관함)와 예시 도움말 3개. 도움말 내용은 학교 규정을 지어내지 않고 '여기에 적어 주세요'로 둔다. */

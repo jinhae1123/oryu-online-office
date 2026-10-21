@@ -146,7 +146,9 @@ function routes_() {
     'admin.speed': { need: 'admin', fn: 'adminSpeed_' },
     'admin.cache.clear': { need: 'admin', fn: 'adminCacheClear_' },
     'admin.staff.importCheck': { need: 'admin', fn: 'adminStaffImportCheck_' },
-    'admin.staff.import': { need: 'admin', fn: 'adminStaffImport_' }
+    'admin.staff.import': { need: 'admin', fn: 'adminStaffImport_' },
+    'admin.site.preview': { need: 'admin', fn: function () { return adminSiteLinksPreview_(); } },
+    'admin.site.import': { need: 'admin', fn: 'adminSiteLinksImport_' }
   };
 }
 
