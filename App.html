@@ -3353,8 +3353,8 @@
   function utf8b(s) { return new TextEncoder().encode(s); }
   function xmlEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  /** 압축하지 않는 zip(엑셀 파일 껍데기) */
-  function zipStore(files) {
+  /** 압축하지 않는 zip(엑셀·워드 파일 껍데기) */
+  function zipStore(files, type) {
     var parts = [], central = [], off = 0;
     files.forEach(function (f) {
       var name = utf8b(f.name), data = utf8b(f.text), crc = crc32(data), n = data.length;
@@ -3371,7 +3371,7 @@
     var size = central.reduce(function (a, b) { return a + b.length; }, 0);
     var e = new DataView(new ArrayBuffer(22));
     e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
-    return new Blob(parts.concat(central).concat([new Uint8Array(e.buffer)]), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    return new Blob(parts.concat(central).concat([new Uint8Array(e.buffer)]), { type: type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
 
   /** XML 머리 줄. Apps Script 템플릿 표시와 헷갈리지 않게 '<' 와 '?' 를 떼어 적는다 */
@@ -3958,7 +3958,8 @@
   function drawMeeting(m) {
     var body = qs('#notice-body');
     var head = '<div class="meet-top print-hide"><button type="button" class="btn btn-sm" data-action="meet-back">' + icon('chevl', 18) + '회의 목록</button>' +
-      '<span class="row-btns"><button type="button" class="btn btn-sm" data-action="meet-print">' + icon('print', 18) + '인쇄</button>' + meetEditBtns(m) + '</span></div>' +
+      '<span class="row-btns"><button type="button" class="btn btn-sm" data-action="meet-print">' + icon('print', 18) + '인쇄</button>' +
+      '<button type="button" class="btn btn-sm" data-action="meet-docx">' + icon('down', 18) + '워드로 내려받기</button>' + meetEditBtns(m) + '</span></div>' +
       '<article class="card meet-doc"><div class="sv-chips">' + meetKindChip(m) + (m.imported ? '<span class="chip">예전 시트에서 옮김</span>' : '') + '</div>' +
       '<h2>' + esc(m.title) + '</h2><p class="faint">' + esc(meetWhen(m)) + '</p>';
     body.innerHTML = head + (m.kind === '부장회의' ? meetBoardHtml(m) : meetStaffHtml(m)) + '</article>';
@@ -4119,6 +4120,54 @@
     window.print();
   }
 
+  /**
+   * 회의 한 건 → 워드(.docx). 인쇄와 같은 내용(제목·일시·장소·표)만 담는다. 한글·구글 드라이브(구글 문서로 열기)에서도 열린다
+   * 바깥 도구 없이 최소한의 워드 XML을 직접 만든다
+   */
+  function meetDocx(m) {
+    var run = function (t, o) {
+      o = o || {};
+      return '<w:r><w:rPr><w:rFonts w:ascii="맑은 고딕" w:hAnsi="맑은 고딕" w:eastAsia="맑은 고딕"/>' + (o.b ? '<w:b/>' : '') + '<w:sz w:val="' + (o.sz || 20) + '"/></w:rPr>' +
+        '<w:t xml:space="preserve">' + xmlEsc(t) + '</w:t></w:r>';
+    };
+    var para = function (t, o) {
+      o = o || {};
+      return '<w:p><w:pPr><w:spacing w:before="' + (o.before || 0) + '" w:after="' + (o.after || 0) + '"/>' + (o.center ? '<w:jc w:val="center"/>' : '') + '</w:pPr>' + (t ? run(t, o) : '') + '</w:p>';
+    };
+    var paras = function (t, o) { return String(t || '').split(/\r?\n/).map(function (l) { return para(l, o); }).join('') || para(''); };
+    var cell = function (w, body, head) {
+      return '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' + (head ? '<w:shd w:val="clear" w:color="auto" w:fill="F2F4F6"/>' : '') + '</w:tcPr>' + body + '</w:tc>';
+    };
+    var table = function (widths, head, rows) {
+      var b = function (n) { return '<w:' + n + ' w:val="single" w:sz="4" w:space="0" w:color="999999"/>'; };
+      return '<w:tbl><w:tblPr><w:tblW w:w="' + widths.reduce(function (a, c) { return a + c; }, 0) + '" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>' +
+        b('top') + b('left') + b('bottom') + b('right') + b('insideH') + b('insideV') + '</w:tblBorders><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+        '<w:tblGrid>' + widths.map(function (w) { return '<w:gridCol w:w="' + w + '"/>'; }).join('') + '</w:tblGrid>' +
+        '<w:tr><w:trPr><w:tblHeader/></w:trPr>' + head.map(function (h, i) { return cell(widths[i], para(h, { b: true }), true); }).join('') + '</w:tr>' +
+        rows.map(function (r) { return '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + r.map(function (c, i) { return cell(widths[i], i === 0 && c.b ? para(c.t, { b: true }) : paras(c.t)); }).join('') + '</w:tr>'; }).join('') + '</w:tbl>';
+    };
+    var body = para(m.title, { b: true, sz: 32, after: 120 }) + para(meetWhen(m), { sz: 20, after: 200 });
+    if (m.kind === '부장회의') {
+      body += table([1900, 7700], ['부서', '내용'], m.rows.map(function (r) {
+        return [{ t: r.name, b: true }, { t: r.many ? r.lines.map(function (l) { return l.text; }).join('\n') : r.text || '' }];
+      }));
+    } else {
+      [['연수', '연수 시간', m.training], ['안건', '비고', m.agenda]].forEach(function (s) {
+        body += para(s[0], { b: true, sz: 24, before: 200, after: 100 });
+        body += s[2].length ? table([700, 4900, 1800, 2200], ['순', '내용', '담당', s[1]], s[2].map(function (l, i) {
+          return [{ t: String(i + 1) }, { t: l.text }, { t: l.who || '' }, { t: l.note || '' }];
+        })) : para('없음');
+      });
+    }
+    var doc = XMLH + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>';
+    return zipStore([
+      { name: '[Content_Types].xml', text: XMLH + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
+      { name: '_rels/.rels', text: XMLH + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
+      { name: 'word/document.xml', text: doc }
+    ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  }
+
   function meetAction(a, t, id) {
     var m = meetById(S.meet.openId);
     switch (a) {
@@ -4129,6 +4178,7 @@
         break;
       case 'meet-back': S.meet.openId = ''; drawMeetings(); window.scrollTo(0, 0); break;
       case 'meet-print': meetPrint(); break;
+      case 'meet-docx': if (m) { saveBlob(meetDocx(m), m.title.replace(/[\\/:*?"<>|]/g, '') + '.docx'); toast('워드 파일을 내려받았어요. 한글·구글 드라이브에서도 열려요'); } break;
       case 'meet-kind': S.meet.kind = t.getAttribute('data-v'); drawMeetings(); break;
       case 'meet-new': openMeetForm(null); break;
       case 'meet-edit': openMeetForm(meetById(id)); break;
@@ -5169,7 +5219,7 @@
         if (S.notice.tab === 'meet') S.meet.openId = '';
         SCREENS.notice(qs('#screen'));
         break;
-      case 'meet-open': case 'meet-back': case 'meet-print': case 'meet-kind': case 'meet-new': case 'meet-edit': case 'meet-del': case 'meet-slot':
+      case 'meet-open': case 'meet-back': case 'meet-print': case 'meet-docx': case 'meet-kind': case 'meet-new': case 'meet-edit': case 'meet-del': case 'meet-slot':
       case 'meet-line-new': case 'meet-line-edit': case 'meet-line-del': case 'meet-move':
         meetAction(a, t, id);
         break;
