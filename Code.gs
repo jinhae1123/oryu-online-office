@@ -156,7 +156,10 @@ function routes_() {
     'admin.site.preview': { need: 'admin', fn: function () { return adminSiteLinksPreview_(); } },
     'admin.site.import': { need: 'admin', fn: 'adminSiteLinksImport_' },
     'admin.meet.preview': { need: 'admin', fn: 'adminMeetImportPreview_' },
-    'admin.meet.import': { need: 'admin', fn: 'adminMeetImport_' }
+    'admin.meet.import': { need: 'admin', fn: 'adminMeetImport_' },
+    'admin.plan.preview': { need: 'admin', fn: 'adminPlanPreview_' },
+    'admin.plan.import': { need: 'admin', fn: 'adminPlanImport_' },
+    'duty.save': { need: 'identity', fn: 'apiDutySave_' }
   };
 }
 
@@ -175,7 +178,7 @@ var ROUTE_TABS_ = {
   'start': [], 'staffPicker': [], 'staff.list': [], 'ui.table': [],
   'session': ['응답', '알림', '조사', '공지'],
   'home': ['일정', '월별중점', '학생수', '응답', '알림', '조사', '자료', '공지'],
-  'sched.month': ['일정', '월별중점'],
+  'sched.month': ['일정', '월별중점', '근무'],
   'sched.year': ['일정'],
   'survey.list': ['조사', '응답', '알림'],
   'survey.get': ['조사', '응답', '알림'],

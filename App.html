@@ -63,7 +63,7 @@
     'sched.upload.info': 1, 'sched.upload.check': 1, 'survey.list': 1, 'survey.get': 1, 'survey.csv': 1, 'lib.list': 1, 'file.get': 1,
     'help.list': 1, 'staff.list': 1, 'notice.list': 1, 'meet.list': 1, 'admin.settings.get': 1, 'admin.cat.list': 1, 'admin.staff.list': 1,
     'admin.log.list': 1, 'admin.trash.list': 1, 'admin.trash.surveys': 1, 'admin.trash.library': 1, 'admin.year.preview': 1,
-    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1, 'admin.site.preview': 1, 'admin.meet.preview': 1,
+    'admin.check': 1, 'admin.speed': 1, 'admin.staff.importCheck': 1, 'admin.site.preview': 1, 'admin.meet.preview': 1, 'admin.plan.preview': 1,
     'ui.table': 1, 'table.list': 1, 'table.get': 1, 'table.poll': 1, 'table.find': 1, 'table.tpl.list': 1, 'table.tpl.get': 1, 'admin.trash.tables': 1
   };
   // 취합 시트에서 칸·열 너비·줄 높이·보기를 고치는 저장: 창 닫기를 막지 않는다(뒤에서 차례로 보냄)
@@ -1542,6 +1542,15 @@
     if (!body || !d) return;
     var last = Number(new Date(Date.UTC(sc.y, sc.m, 0)).getUTCDate());
     var rows = '';
+    var duty = d.duty || {};
+    var showDuty = d.canManage || Object.keys(duty).length > 0; // 보안관·당직이 없는 달은 칸을 숨긴다(관리는 넣을 수 있게 늘 보인다)
+    var dutyCells = function (day) {
+      var x = duty[day] || {};
+      var guard = [x.am, x.pm].filter(Boolean).join(' / ');
+      if (!d.canManage) return '<td class="c-duty">' + esc(guard) + '</td><td class="c-duty">' + esc(x.night || '') + '</td>';
+      var b = function (t) { return '<button type="button" class="plan-duty" data-action="duty-edit" data-day="' + day + '">' + (t ? esc(t) : '<span class="faint print-hide">+</span>') + '</button>'; };
+      return '<td class="c-duty">' + b(guard) + '</td><td class="c-duty">' + b(x.night || '') + '</td>';
+    };
     for (var i = 1; i <= last; i++) {
       var day = sc.y + '-' + ('0' + sc.m).slice(-2) + '-' + ('0' + i).slice(-2);
       var list = d.events.filter(function (e) { return onDay(e, day); });
@@ -1557,16 +1566,40 @@
       };
       rows += '<tr class="' + (w === 0 || w === 6 ? 'we' : '') + (off ? ' off' : '') + '">' +
         '<td class="c-date">' + i + '</td><td class="c-dow">' + DOW.charAt(w) + '</td>' +
-        '<td>' + ev.map(name).join('') + '</td><td>' + act.map(name).join('') + '</td><td class="c-dept">' + esc(depts.join(', ')) + '</td></tr>';
+        '<td>' + ev.map(name).join('') + '</td><td>' + act.map(name).join('') + '</td><td class="c-dept">' + esc(depts.join(', ')) + '</td>' + (showDuty ? dutyCells(day) : '') + '</tr>';
     }
     var focus = d.focus || {};
     body.innerHTML = '<div class="card plan-card">' + monthNav(d.schoolYear + '학년도 ' + sc.m + '월 교육활동 계획') +
       '<div class="plan-focus"><div class="card-head"><b>' + sc.m + '월 중점지도</b>' +
       (d.canManage ? '<button type="button" class="linkish print-hide" data-action="focus-edit">' + (focus.text ? '고치기' : '넣기') + '</button>' : '') + '</div>' +
       (focus.text ? '<p class="focus-text">' + esc(focus.text) + '</p>' : '<p class="faint">아직 없어요</p>') + '</div>' +
-      '<div class="table-wrap"><table class="plan"><thead><tr><th class="c-date">날짜</th><th class="c-dow">요일</th><th>행사</th><th>교육활동</th><th class="c-dept">담당 부서</th></tr></thead>' +
+      '<div class="table-wrap"><table class="plan"><thead><tr><th class="c-date">날짜</th><th class="c-dow">요일</th><th>행사</th><th>교육활동</th><th class="c-dept">담당 부서</th>' +
+      (showDuty ? '<th class="c-duty">보안관<br><span class="faint">오전 / 오후</span></th><th class="c-duty">당직</th>' : '') + '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>' +
       '<p class="hint print-hide">' + icon('info', 16) + '<span>달력에 넣은 일정이 그대로 모여요. 따로 입력하지 않아요. 인쇄하면 흰 바탕으로 나와요.</span></p></div>';
+  }
+
+  /** 보안관·당직 고치기(관리) */
+  function openDutyForm(day) {
+    var d = S.sched.data;
+    if (!d || !d.canManage || !needMe('보안관·당직을 고치면')) return;
+    var x = (d.duty || {})[day] || {};
+    var f = function (id, label, v) { return '<div class="field"><label class="label" for="' + id + '">' + label + '</label><input id="' + id + '" class="input" maxlength="30" value="' + esc(v || '') + '"></div>'; };
+    openModal('<h2 id="m-title">' + esc(mdw(day)) + ' 보안관·당직</h2><form class="form" id="duty-form" novalidate>' +
+      '<div class="form-grid">' + f('du-am', '보안관 (오전)', x.am) + f('du-pm', '보안관 (오후)', x.pm) + '</div>' + f('du-night', '당직 (야간)', x.night) +
+      '<p class="hint">' + icon('info', 16) + '<span>모두 비우고 저장하면 그날 칸이 비어요.</span></p>' +
+      '<p class="err" id="du-err" role="alert"></p><div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="submit" class="btn btn-primary">저장</button></div></form>');
+    qs('#duty-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var btn = ev.target.querySelector('[type=submit]');
+      busy(btn, true, '저장하는 중');
+      server('duty.save', { date: day, am: qs('#du-am').value, pm: qs('#du-pm').value, night: qs('#du-night').value }, schedThen('')).then(function () {
+        closeModal();
+        reloadSched();
+        toast('보안관·당직을 저장했어요');
+      }).catch(function (e) { busy(btn, false); qs('#du-err').textContent = e.message; });
+    });
+    qs('#du-am').focus();
   }
 
   // ------------------------------------------------------------ 월별 계획 인쇄: A4 세로 한 장(교사 요청)
@@ -3134,8 +3167,9 @@
         '<ul class="site-list">' + p.items.map(row).join('') + '</ul>' +
         '<p class="err" id="site-err" role="alert"></p>' +
         (news.length ? '<button type="button" class="btn btn-primary" id="site-go" style="align-self:flex-start">링크 ' + news.length + '개 넣기</button>'
-          : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section><section class="card" id="meet-imp"></section></div>';
+          : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section><section class="card" id="meet-imp"></section><section class="card" id="plan-imp"></section></div>';
       meetImportCard(qs('#meet-imp'));
+      planImportCard(qs('#plan-imp'));
       var go = qs('#site-go');
       if (go) go.addEventListener('click', function () {
         confirmBox('링크 ' + news.length + '개를 넣을까요?', esc(p.year) + '학년도 자료실에 종합사이트 링크 ' + news.length + '개를 카드로 넣어요.', '넣기', function () {
@@ -3150,40 +3184,84 @@
     }).catch(function (e) { panel.innerHTML = failHtml(e); });
   }
 
-  /** 관리자 › 가져오기: 예전 구글 시트의 부장회의·교직원회의 회의록을 옮긴다 */
-  var MEET_IMP = { url: '', kind: '부장회의' };
+  /** 가져올 곳: 엑셀 파일 또는 구글 시트 주소(둘 중 하나). st = { url, file: { name, sheets } } */
+  function importSrcHtml(pre, st) {
+    return '<div class="field"><label class="label" for="' + pre + '-file">엑셀 파일(.xlsx)</label><input id="' + pre + '-file" class="input" type="file" accept=".xlsx">' +
+      '<p class="faint" id="' + pre + '-fname" style="margin:0">' + (st.file ? '고른 파일: ' + esc(st.file.name) + ' (탭 ' + st.file.sheets.length + '개)' : '') + '</p></div>' +
+      '<div class="field"><label class="label" for="' + pre + '-url">또는 구글 시트 주소</label><input id="' + pre + '-url" class="input" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="' + esc(st.url) + '"></div>';
+  }
+  function importSrcBind(pre, st, onChange) {
+    var f = qs('#' + pre + '-file'), u = qs('#' + pre + '-url'), nm = qs('#' + pre + '-fname');
+    f.addEventListener('change', function () {
+      var file = f.files && f.files[0];
+      if (!file) return;
+      nm.textContent = '파일을 읽는 중이에요…';
+      file.arrayBuffer().then(function (buf) { return readXlsxSheets(buf); }).then(function (list) {
+        st.file = { name: file.name, sheets: list.map(function (x) { return { name: x.name, vals: trimGrid(x.vals) }; }) };
+        st.url = ''; u.value = '';
+        nm.textContent = '고른 파일: ' + file.name + ' (탭 ' + list.length + '개)';
+        onChange();
+      }).catch(function () { st.file = null; f.value = ''; nm.textContent = '이 파일을 읽지 못했어요. 엑셀(.xlsx) 파일인지 확인해 주세요.'; });
+    });
+    u.addEventListener('input', function () {
+      st.url = u.value.trim();
+      if (st.url && st.file) { st.file = null; f.value = ''; nm.textContent = ''; }
+      onChange();
+    });
+  }
+  /** 서버에 보낼 값({ sheets, fileName } 또는 { url }). 없으면 null */
+  function importSrcArgs(st) {
+    if (st.file) return { sheets: st.file.sheets, fileName: st.file.name };
+    if (/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(st.url)) return { url: st.url };
+    return null;
+  }
+  /** 뒤쪽 빈 줄·빈 칸을 떼어 보내는 양을 줄인다 */
+  function trimGrid(vals) {
+    var out = vals.map(function (row) {
+      var r = row.slice();
+      while (r.length && !String(r[r.length - 1]).trim()) r.pop();
+      return r;
+    });
+    while (out.length && !out[out.length - 1].length) out.pop();
+    return out;
+  }
+
+  /** 관리자 › 가져오기: 예전 시트·엑셀의 부장회의·교직원회의 회의록을 옮긴다 */
+  var MEET_IMP = { url: '', file: null, kind: '부장회의' };
   function meetImportCard(box) {
     if (!box) return;
     var kb = function (v) { return '<button type="button" data-v="' + v + '" aria-pressed="' + (MEET_IMP.kind === v) + '">' + v + '</button>'; };
     box.innerHTML = '<h2>기존 회의록 가져오기</h2>' +
-      '<p class="muted" style="margin:0">예전에 구글 시트로 쓰던 회의록을 공지 › 회의록으로 옮겨요. 시트 주소를 넣고 \'살펴보기\'를 누르면 옮길 회의를 먼저 보여 드려요.</p>' +
-      '<ul class="guide-list"><li>부장회의 시트: 학기마다 탭이 있고, 탭 안에 \'2026학년도 2학기 부장회의 (5)\' 같은 제목으로 회의가 쌓인 모양</li>' +
-      '<li>교직원회의 시트: 달마다 탭이 있고, 일시·장소와 &lt;연수&gt;·&lt;안건&gt; 표가 있는 모양</li>' +
+      '<p class="muted" style="margin:0">예전에 쓰던 회의록을 공지 › 회의록으로 옮겨요. 엑셀 파일을 고르거나 구글 시트 주소를 넣고 \'살펴보기\'를 누르면 옮길 회의를 먼저 보여 드려요.</p>' +
+      '<ul class="guide-list"><li>부장회의: 학기마다 탭이 있고, 탭 안에 \'2026학년도 2학기 부장회의 (5)\' 같은 제목으로 회의가 쌓인 모양</li>' +
+      '<li>교직원회의: 달마다 탭이 있고, 일시·장소와 &lt;연수&gt;·&lt;안건&gt;(·&lt;소개&gt;) 표가 있는 모양. &lt;소개&gt;는 연수 표에 [소개]를 붙여 넣어요.</li>' +
       '<li>이미 옮긴 회의(부장회의는 학년도·학기·회차, 교직원회의는 날짜가 같은 것)는 다시 넣지 않아요. 여러 번 눌러도 괜찮아요.</li>' +
-      '<li>시트는 웹앱을 만든 계정이 볼 수 있어야 해요. 원래 시트는 바뀌지 않아요.</li></ul>' +
+      '<li>구글 시트는 웹앱을 만든 계정이 볼 수 있어야 해요. 원래 파일·시트는 바뀌지 않아요.</li></ul>' +
       '<div class="field"><span class="label">회의 종류</span><div class="seg" id="mi-kind" role="group" aria-label="회의 종류">' + kb('부장회의') + kb('교직원회의') + '</div></div>' +
-      '<div class="field"><label class="label" for="mi-url">시트 주소</label><input id="mi-url" class="input" type="url" inputmode="url" placeholder="https://docs.google.com/spreadsheets/d/…" value="' + esc(MEET_IMP.url) + '"></div>' +
+      importSrcHtml('mi', MEET_IMP) +
       '<p class="err" id="mi-err" role="alert"></p><button type="button" class="btn" id="mi-check" style="align-self:flex-start">' + icon('search', 18) + '살펴보기</button><div id="mi-out" class="stack"></div>';
+    var clear = function () { qs('#mi-out').innerHTML = ''; qs('#mi-err').textContent = ''; };
+    importSrcBind('mi', MEET_IMP, clear);
     qs('#mi-kind').addEventListener('click', function (ev) {
       var b = ev.target.closest('button[data-v]');
       if (!b) return;
       MEET_IMP.kind = b.getAttribute('data-v');
       qsa('#mi-kind button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-      qs('#mi-out').innerHTML = '';
+      clear();
     });
     var check = qs('#mi-check');
     check.addEventListener('click', function () {
-      MEET_IMP.url = qs('#mi-url').value.trim();
       var err = qs('#mi-err'), out = qs('#mi-out');
       err.textContent = '';
-      if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\//.test(MEET_IMP.url)) { err.textContent = '구글 시트 주소(https://docs.google.com/spreadsheets/d/…)를 넣어 주세요.'; return; }
-      busy(check, true, '시트를 읽는 중');
-      var args = { url: MEET_IMP.url, kind: MEET_IMP.kind };
+      var args = importSrcArgs(MEET_IMP);
+      if (!args) { err.textContent = '엑셀 파일을 고르거나 구글 시트 주소(https://docs.google.com/spreadsheets/d/…)를 넣어 주세요.'; return; }
+      args.kind = MEET_IMP.kind;
+      busy(check, true, '읽는 중');
       server('admin.meet.preview', args).then(function (p) {
         busy(check, false);
         var news = p.items.filter(function (i) { return i.state === 'new'; });
         var lines = news.reduce(function (n, i) { return n + i.entries; }, 0);
-        var stateText = { have: '이미 있음', dup: '시트 안에 같은 회의가 또 있음' };
+        var stateText = { have: '이미 있음', dup: '같은 회의가 또 있음' };
         out.innerHTML = '<p class="faint" style="margin:0">읽은 탭: ' + esc(p.sheets.join(', ')) + '</p>' +
           (p.items.length ? '<ul class="site-list">' + p.items.map(function (i) {
             return '<li class="site-item' + (i.state === 'new' ? '' : ' faint') + '"><b>' + esc(i.title) + '</b> <span class="faint">' +
@@ -3191,7 +3269,7 @@
               (i.state === 'new' ? '' : ' <span class="chip">' + stateText[i.state] + '</span>') +
               (i.noDate ? ' <span class="chip chip-warn">날짜를 못 찾아 그달 1일로 넣음</span>' : '') +
               (i.unmatched.length ? '<br><span class="faint">못 찾은 칸 이름 ' + esc(i.unmatched.join(', ')) + ' → 기타 안건에 [이름]을 붙여 넣어요</span>' : '') + '</li>';
-          }).join('') + '</ul>' : '<p class="err">' + esc(p.kind) + ' 회의를 찾지 못했어요. 회의 종류와 시트 주소를 확인해 주세요.</p>') +
+          }).join('') + '</ul>' : '<p class="err">' + esc(p.kind) + ' 회의를 찾지 못했어요. 회의 종류와 파일(주소)을 확인해 주세요.</p>') +
           (news.length ? '<button type="button" class="btn btn-primary" id="mi-go" style="align-self:flex-start">회의 ' + news.length + '건 옮기기</button>'
             : p.items.length ? '<p class="ok-text">옮길 회의가 없어요. 모두 들어가 있어요.</p>' : '');
         var goBtn = qs('#mi-go');
@@ -3201,6 +3279,58 @@
               closeModal();
               S.meet.data = null;
               toast('회의 ' + r.added + '건, 내용 ' + r.entries + '줄을 옮겼어요');
+              check.click();
+            });
+          });
+        });
+      }).catch(function (e) { busy(check, false); err.textContent = e.message; });
+    });
+  }
+
+  /** 관리자 › 가져오기: 예전 '월 중 행사 및 교육계획'을 일정(월별 계획)과 보안관·당직으로 옮긴다 */
+  var PLAN_IMP = { url: '', file: null };
+  function planImportCard(box) {
+    if (!box) return;
+    box.innerHTML = '<h2>월 중 계획 가져오기</h2>' +
+      '<p class="muted" style="margin:0">예전 \'월 중 행사 및 교육계획\'을 일정 › 월별 계획으로 옮겨요. 엑셀 파일을 고르거나 구글 시트 주소를 넣고 \'살펴보기\'를 누르세요.</p>' +
+      '<ul class="guide-list"><li>행사 칸은 구분 \'행사\', 교육활동 칸은 \'교육활동\', 부장회의·교직원회의 칸은 \'회의\'로 넣어요. 한 칸의 여러 줄은 한 줄씩 따로 넣어요.</li>' +
+      '<li>\'부장 회의 (15:00, 교장실)\'처럼 끝 괄호의 시각·장소는 시간·장소 칸으로 나눠요.</li>' +
+      '<li>보안관(오전·오후)과 당직은 월별 계획 표의 칸으로 보여요.</li>' +
+      '<li>같은 날 이름이 같은 일정이 이미 있으면(학사일정의 공휴일 등) 넣지 않아요. 여러 번 눌러도 괜찮아요.</li></ul>' +
+      importSrcHtml('pi', PLAN_IMP) +
+      '<p class="err" id="pi-err" role="alert"></p><button type="button" class="btn" id="pi-check" style="align-self:flex-start">' + icon('search', 18) + '살펴보기</button><div id="pi-out" class="stack"></div>';
+    importSrcBind('pi', PLAN_IMP, function () { qs('#pi-out').innerHTML = ''; qs('#pi-err').textContent = ''; });
+    var check = qs('#pi-check');
+    check.addEventListener('click', function () {
+      var err = qs('#pi-err'), out = qs('#pi-out');
+      err.textContent = '';
+      var args = importSrcArgs(PLAN_IMP);
+      if (!args) { err.textContent = '엑셀 파일을 고르거나 구글 시트 주소(https://docs.google.com/spreadsheets/d/…)를 넣어 주세요.'; return; }
+      busy(check, true, '읽는 중');
+      server('admin.plan.preview', args).then(function (p) {
+        busy(check, false);
+        var ev = p.events, du = p.duty, n = ev.add + du.add + du.change;
+        out.innerHTML = (p.blocks.length ? '<ul class="site-list">' + p.blocks.map(function (b) {
+          return '<li class="site-item' + (b.skipped ? ' faint' : '') + '"><b>' + esc(b.label) + '</b> <span class="faint">' +
+            (b.skipped ? '날짜를 알 수 없어 건너뜀' : esc(md(b.from) + ' ~ ' + md(b.to) + ' · ' + b.days + '일')) + '</span></li>';
+        }).join('') + '</ul>' : '<p class="err">\'&lt; 10월 행사 및 교육계획 &gt;\' 같은 표를 찾지 못했어요. 파일(주소)을 확인해 주세요.</p>') +
+          '<div class="box"><p style="margin:0"><b>일정 ' + ev.add + '건</b>을 넣어요 <span class="faint">(' + ev.byKind.map(function (k) { return k.kind + ' ' + k.add; }).join(' · ') + ')</span></p>' +
+          (ev.have + ev.dup ? '<p class="faint" style="margin:4px 0 0">이미 있어서 건너뜀 ' + (ev.have + ev.dup) + '건</p>' : '') +
+          '<p style="margin:8px 0 0"><b>보안관·당직 ' + (du.add + du.change) + '일</b>을 넣어요' + (du.change ? ' <span class="faint">(바뀐 날 ' + du.change + '일 포함)</span>' : '') + '</p>' +
+          (du.have ? '<p class="faint" style="margin:4px 0 0">이미 같은 날 ' + du.have + '일은 그대로</p>' : '') + '</div>' +
+          (p.sample.length ? '<p class="faint" style="margin:0">넣을 일정 예시</p><ul class="site-list">' + p.sample.map(function (e) {
+            return '<li class="site-item">' + esc(mdw(e.date)) + ' <span class="chip">' + esc(e.kind) + '</span> <b>' + esc(e.title) + '</b>' +
+              (e.time || e.place ? ' <span class="faint">' + esc([e.time, e.place].filter(Boolean).join(' · ')) + '</span>' : '') + '</li>';
+          }).join('') + '</ul>' : '') +
+          (n ? '<button type="button" class="btn btn-primary" id="pi-go" style="align-self:flex-start">일정 ' + ev.add + '건 · 근무 ' + (du.add + du.change) + '일 넣기</button>'
+            : p.blocks.length ? '<p class="ok-text">넣을 것이 없어요. 모두 들어가 있어요.</p>' : '');
+        var goBtn = qs('#pi-go');
+        if (goBtn) goBtn.addEventListener('click', function () {
+          confirmBox('월 중 계획을 옮길까요?', '일정 ' + ev.add + '건과 보안관·당직 ' + (du.add + du.change) + '일을 넣어요. 넣은 일정은 일정 화면에서 보통 일정처럼 고치거나 지울 수 있어요.', '넣기', function () {
+            return server('admin.plan.import', args).then(function (r) {
+              closeModal();
+              S.home = null;
+              toast('일정 ' + r.events + '건, 보안관·당직 ' + r.duty + '일을 넣었어요');
               check.click();
             });
           });
@@ -3320,43 +3450,60 @@
 
   /** .xlsx 첫 시트 → 칸 목록 */
   function readXlsx(buf) {
+    return readXlsxSheets(buf, true).then(function (list) { return list[0].vals; });
+  }
+
+  /** 엑셀 파일의 탭들 → [{ name, vals }] (onlyFirst면 첫 탭만) */
+  function readXlsxSheets(buf, onlyFirst) {
     var z = unzip(buf);
     var get = function (n) { return z[n] ? z[n]() : Promise.resolve(''); };
     return Promise.all([get('xl/sharedStrings.xml'), get('xl/workbook.xml'), get('xl/_rels/workbook.xml.rels')]).then(function (r) {
       var shared = r[0] ? byLocal(xmlDoc(r[0]), 'si').map(function (si) { return byLocal(si, 't').map(function (t) { return t.textContent; }).join(''); }) : [];
-      var path = 'xl/worksheets/sheet1.xml';
+      var list = [];
       if (r[1] && r[2]) {
-        var first = byLocal(xmlDoc(r[1]), 'sheet')[0];
-        var rid = first && (first.getAttribute('r:id') || first.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
-        var rel = byLocal(xmlDoc(r[2]), 'Relationship').filter(function (x) { return x.getAttribute('Id') === rid; })[0];
-        if (rel) path = rel.getAttribute('Target').replace(/^\/?xl\//, '').replace(/^\//, '');
-        if (path.indexOf('xl/') !== 0) path = 'xl/' + path;
-      }
-      if (!z[path]) path = Object.keys(z).filter(function (n) { return /^xl\/worksheets\/[^\/]+\.xml$/.test(n); })[0];
-      if (!path) throw new Error('엑셀 파일에서 시트를 찾지 못했어요.');
-      return get(path).then(function (text) {
-        var grid = [];
-        byLocal(xmlDoc(text), 'row').forEach(function (row) {
-          var line = [];
-          byLocal(row, 'c').forEach(function (c) {
-            var ref = c.getAttribute('r') || '';
-            var letters = (/^[A-Z]+/.exec(ref) || [''])[0], col = 0;
-            for (var i = 0; i < letters.length; i++) col = col * 26 + letters.charCodeAt(i) - 64;
-            col = letters ? col - 1 : line.length;
-            var t = c.getAttribute('t'), v = byLocal(c, 'v')[0], val = '';
-            if (t === 's') val = shared[Number(v && v.textContent)] || '';
-            else if (t === 'inlineStr') val = byLocal(c, 't').map(function (x) { return x.textContent; }).join('');
-            else val = v ? v.textContent : '';
-            while (line.length < col) line.push('');
-            line[col] = val;
-          });
-          var rn = Number(row.getAttribute('r')) || grid.length + 1;
-          while (grid.length < rn - 1) grid.push([]);
-          grid.push(line);
+        var rels = byLocal(xmlDoc(r[2]), 'Relationship');
+        byLocal(xmlDoc(r[1]), 'sheet').forEach(function (sh) {
+          var rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+          var rel = rels.filter(function (x) { return x.getAttribute('Id') === rid; })[0];
+          if (!rel) return;
+          var path = rel.getAttribute('Target').replace(/^\/?xl\//, '').replace(/^\//, '');
+          if (path.indexOf('xl/') !== 0) path = 'xl/' + path;
+          if (z[path]) list.push({ name: sh.getAttribute('name') || '', path: path });
         });
-        return grid;
+      }
+      if (!list.length) {
+        var any = Object.keys(z).filter(function (n) { return /^xl\/worksheets\/[^\/]+\.xml$/.test(n); }).sort()[0];
+        if (any) list.push({ name: '', path: any });
+      }
+      if (!list.length) throw new Error('엑셀 파일에서 시트를 찾지 못했어요.');
+      if (onlyFirst) list = list.slice(0, 1);
+      return Promise.all(list.map(function (x) { return get(x.path); })).then(function (texts) {
+        return list.map(function (x, k) { return { name: x.name, vals: xlsxGrid(texts[k], shared) }; });
       });
     });
+  }
+
+  function xlsxGrid(text, shared) {
+    var grid = [];
+    byLocal(xmlDoc(text), 'row').forEach(function (row) {
+      var line = [];
+      byLocal(row, 'c').forEach(function (c) {
+        var ref = c.getAttribute('r') || '';
+        var letters = (/^[A-Z]+/.exec(ref) || [''])[0], col = 0;
+        for (var i = 0; i < letters.length; i++) col = col * 26 + letters.charCodeAt(i) - 64;
+        col = letters ? col - 1 : line.length;
+        var t = c.getAttribute('t'), v = byLocal(c, 'v')[0], val = '';
+        if (t === 's') val = shared[Number(v && v.textContent)] || '';
+        else if (t === 'inlineStr') val = byLocal(c, 't').map(function (x) { return x.textContent; }).join('');
+        else val = v ? v.textContent : '';
+        while (line.length < col) line.push('');
+        line[col] = val;
+      });
+      var rn = Number(row.getAttribute('r')) || grid.length + 1;
+      while (grid.length < rn - 1) grid.push([]);
+      grid.push(line);
+    });
+    return grid;
   }
 
   /** CSV(엑셀이 저장한 한글 CSV는 EUC-KR일 때가 많다) */
@@ -4558,7 +4705,7 @@
     'sched.month': '일정(달력)', 'sched.year': '연간 학사일정', 'sched.save': '일정 저장', 'sched.delete': '일정 지우기', 'focus.save': '중점지도 저장',
     'students.save': '학생 수 저장', 'survey.list': '조사 목록', 'survey.get': '조사 보기', 'survey.respond': '조사 응답', 'survey.save': '조사 만들기·고치기',
     'lib.list': '자료실', 'lib.save': '자료 넣기·고치기', 'lib.delete': '자료 지우기', 'notice.list': '공지', 'notice.save': '공지 쓰기·고치기',
-    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', 'meet.list': '회의록', 'meet.save': '회의 만들기·고치기', 'meet.delete': '회의 지우기', 'meet.entry.save': '회의록 쓰기', 'meet.entry.delete': '회의록 항목 지우기', 'meet.entry.move': '회의록 순서 바꾸기', 'admin.meet.preview': '회의록 가져오기 미리보기', 'admin.meet.import': '회의록 가져오기', batch: '미리 받기(뒤에서)',
+    'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', 'meet.list': '회의록', 'meet.save': '회의 만들기·고치기', 'meet.delete': '회의 지우기', 'meet.entry.save': '회의록 쓰기', 'meet.entry.delete': '회의록 항목 지우기', 'meet.entry.move': '회의록 순서 바꾸기', 'admin.meet.preview': '회의록 가져오기 미리보기', 'admin.meet.import': '회의록 가져오기', 'admin.plan.preview': '월 중 계획 미리보기', 'admin.plan.import': '월 중 계획 가져오기', 'duty.save': '보안관·당직 고치기', batch: '미리 받기(뒤에서)',
     'sched.upload.info': '학사일정 올리기 화면', 'sched.upload.check': '학사일정 미리보기', 'sched.upload.save': '학사일정 올리기',
     'admin.cache.clear': '시트 새로 읽기', 'admin.settings.get': '설정(관리자)', 'admin.log.list': '수정 기록', 'survey.remind': '다시 알리기'
   };
@@ -4995,6 +5142,7 @@
         else if (needMe('공지를 쓰면')) { S.notice.openNew = true; S.notice.tab = 'notice'; go('notice'); }
         break;
       case 'notice-all': closeModal(); S.notice.tab = 'notice'; go('notice'); break;
+      case 'duty-edit': openDutyForm(t.getAttribute('data-day')); break;
       case 'notice-tab':
         S.notice.tab = t.getAttribute('data-v');
         if (S.notice.tab === 'meet') S.meet.openId = '';
