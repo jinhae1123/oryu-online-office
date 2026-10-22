@@ -4,7 +4,7 @@
  * - 예전 '월 중 행사 및 교육계획' 엑셀·구글 시트를 읽어 일정(월별 계획)에 넣는다
  *   · 시트 모양: '< 10월 행사 및 교육계획 >' 제목 → 머리글(날짜·요일·행사·교육활동·부장회의 교직원회의·보안관(오전·오후)·당직) → 날마다 한 줄
  *   · '8,9월', '방학 중'처럼 달을 넘는 표는 날짜 숫자가 작아지면 다음 달로 본다. 달이 안 적힌 표('방학 중')는 붙어 있는 앞 달 표에 이어진다
- *   · 행사 칸 → 구분 '행사', 교육활동 칸 → '교육활동', 회의 칸 → '회의'(대상 교직원). 한 칸의 여러 줄은 한 줄씩 따로 넣는다
+ *   · 행사 칸 → 구분 '행사', 교육활동 칸 → '교육활동'(초등예술하나·문예체 등은 '협력 수업'), 회의 칸 → '회의'(대상 교직원). 한 칸의 여러 줄은 한 줄씩 따로 넣는다
  *   · '부장 회의 (15:00, 교장실)'처럼 끝 괄호의 시각·장소는 시간·장소 칸으로 나눈다
  *   · 같은 날 이름이 같은(또는 한쪽이 다른 쪽을 품은) 일정이 이미 있으면 넣지 않는다(학사일정의 공휴일과 겹치지 않게)
  * - 보안관(오전·오후)·당직은 '근무' 탭에 하루 한 줄로 두고 월별 계획 표에 칸으로 보인다. 관리가 고친다
@@ -137,7 +137,8 @@ function planParse_(sheets, schoolYear) {
       [['행사', b.col.event], ['교육활동', b.col.act], ['회의', b.col.meet]].forEach(function (k) {
         planLines_(get(r.cells, k[1])).forEach(function (line) {
           var p = planSplitTitle_(line);
-          events.push({ date: date, kind: k[0], title: p.title, time: p.time, place: p.place });
+          var kind = k[0] === '교육활동' && COOP_HINT_.test(p.title) && !COOP_NOT_.test(p.title) ? '협력 수업' : k[0]; // 초등예술하나·문예체 등
+          events.push({ date: date, kind: kind, title: p.title, time: p.time, place: p.place });
         });
       });
       var am = get(r.cells, b.col.am), pm = get(r.cells, b.col.pm), night = get(r.cells, b.col.night);
@@ -187,7 +188,7 @@ function adminPlanPreview_(args) {
     year: p.year,
     blocks: p.blocks,
     events: { total: p.events.length, add: count(p.events, '', 'new'), have: count(p.events, '', 'have'), dup: count(p.events, '', 'dup'),
-      byKind: ['행사', '교육활동', '회의'].map(function (k) { return { kind: k, add: count(p.events, k, 'new') }; }) },
+      byKind: ['행사', '교육활동', '협력 수업', '회의'].map(function (k) { return { kind: k, add: count(p.events, k, 'new') }; }) },
     duty: { total: p.duty.length, add: count(p.duty, '', 'new'), change: count(p.duty, '', 'change'), have: count(p.duty, '', 'have') },
     sample: p.events.filter(function (e) { return e.state === 'new'; }).slice(0, 12),
     skipped: p.events.filter(function (e) { return e.state === 'have'; }).slice(0, 8)

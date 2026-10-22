@@ -2,14 +2,14 @@
  * Schedule.gs — 일정(학사일정·월별 계획·홈)과 수업일수 계산
  *
  * 한 번 넣은 행사는 '일정' 탭 한 곳에만 저장되고, 달력·연간 학사일정·월별 계획·홈이 모두 같은 줄을 읽는다.
- * 구분: 행사 / 교육활동 / 휴업일 / 공휴일  (휴업일·공휴일은 수업일수에서 빠진다)
+ * 구분: 행사 / 교육활동 / 회의 / 협력 수업 / 휴업일 / 공휴일  (휴업일·공휴일은 수업일수에서 빠진다)
  * 대상 학년: '전체' 또는 '1,2,교직원' 처럼 쉼표로 이어 쓴다.
  * 고치기·지우기: 처음 넣은 사람, 역할이 '관리'인 분, 관리자 화면을 연 분만.
  */
 
 
 function schedKinds_() {
-  return ['행사', '교육활동', '회의', '휴업일', '공휴일'];
+  return ['행사', '교육활동', '회의', '협력 수업', '휴업일', '공휴일'];
 }
 
 function schedTargets_() {
@@ -280,8 +280,35 @@ function apiSchedSave_(args, actor, ctx) {
     updateRow_('일정', row['일정ID'], rec, actor, '일정 고침: ' + eventSummary_(rec));
     return eventView_(findRow_('일정', row['일정ID']), ctx, depts, names);
   }
+  var dates = repeatDates_(rec['시작일'], args.repeatUntil);
+  if (dates.length > 1) { // 매주 같은 요일 반복: 한 주씩 미룬 일정을 따로따로 넣는다(하나씩 고치거나 지울 수 있게)
+    var span = rec['끝일'] ? (ymdToUtc_(rec['끝일']) - ymdToUtc_(rec['시작일'])) / 86400000 : 0;
+    var rows = insertRows_('일정', dates.map(function (d) {
+      var r = {};
+      Object.keys(rec).forEach(function (k) { r[k] = rec[k]; });
+      r['시작일'] = d;
+      r['끝일'] = span ? addDays_(d, span) : '';
+      return r;
+    }), actor, '일정 추가(매주 ' + dates.length + '번): ' + eventSummary_(rec));
+    var first = eventView_(findRow_('일정', rows[0]['일정ID']), ctx, depts, names);
+    first.repeated = dates.length;
+    return first;
+  }
   var added = insertRow_('일정', rec, actor, '일정 추가: ' + eventSummary_(rec));
   return eventView_(findRow_('일정', added['일정ID']), ctx, depts, names);
+}
+
+/** 시작일부터 until까지 7일마다(시작일 포함). until이 없으면 [시작일]. 한 번에 30번까지 */
+function repeatDates_(start, until) {
+  if (!until) return [start];
+  var end = checkYmd_(until, '반복 끝나는 날');
+  if (end < start) throw userError_('반복 끝나는 날이 시작하는 날보다 앞에 있어요.');
+  var out = [];
+  for (var d = start; d <= end; d = addDays_(d, 7)) {
+    out.push(d);
+    if (out.length > 30) throw userError_('매주 반복은 30번까지 한 번에 넣을 수 있어요. 끝나는 날을 앞당겨 주세요.');
+  }
+  return out;
 }
 
 function apiSchedDelete_(args, actor, ctx) {
@@ -293,6 +320,54 @@ function apiSchedDelete_(args, actor, ctx) {
   }
   softDelete_('일정', row['일정ID'], actor, '일정 지움: ' + eventSummary_(row));
   return { done: true };
+}
+
+// ---------------------------------------------------------------- 협력 수업 정리 (연구부장·부담당)
+//
+// 월 중 계획에서 옮긴 협력 수업은 '3학년 초등예술하나(1-4교시)'처럼 이름에 '협력 수업'이 없어 교육활동에 섞여 있다.
+// 행사·교육활동을 같은 이름끼리 묶어 보여 주고, 고른 묶음을 구분 '협력 수업'으로 한 번에 바꾼다
+var COOP_HINT_ = /초등예술하나|문예체|칼림바|우쿨렐레|협력\s*수업/;
+var COOP_NOT_ = /협력\s*(강사|교사)/; // '협력강사 시작', '협력교사 협의회'는 수업이 아니다
+
+function coopKey_(title) {
+  return String(title || '').replace(/\s+/g, '');
+}
+
+function coopRows_() {
+  return liveRows_('일정').filter(function (e) {
+    var k = e['구분'] || '행사';
+    return (k === '행사' || k === '교육활동') && coopKey_(e['행사명']);
+  });
+}
+
+function apiCoopList_(args, actor, ctx) {
+  if (!canManage_(ctx)) throw userError_('협력 수업 정리는 연구부장·부담당이 해요.', 'FORBIDDEN');
+  var groups = {};
+  coopRows_().forEach(function (e) {
+    var k = coopKey_(e['행사명']), d = e['시작일'];
+    var g = groups[k] || (groups[k] = { key: k, title: e['행사명'], kind: e['구분'] || '행사', count: 0, first: d, last: d });
+    g.count++;
+    if (d < g.first) g.first = d;
+    if (d > g.last) g.last = d;
+  });
+  var list = Object.keys(groups).map(function (k) {
+    var g = groups[k];
+    g.hint = COOP_HINT_.test(g.title) && !COOP_NOT_.test(g.title);
+    return g;
+  });
+  list.sort(function (a, b) { return (b.hint - a.hint) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); });
+  return { groups: list };
+}
+
+/** args.keys = 묶음 key 목록 → 그 이름의 행사·교육활동을 모두 구분 '협력 수업'으로 */
+function apiCoopMove_(args, actor, ctx) {
+  if (!canManage_(ctx)) throw userError_('협력 수업 정리는 연구부장·부담당이 해요.', 'FORBIDDEN');
+  var want = {};
+  (Array.isArray(args.keys) ? args.keys : []).slice(0, 1000).forEach(function (k) { want[String(k)] = true; });
+  var ids = coopRows_().filter(function (e) { return want[coopKey_(e['행사명'])]; }).map(function (e) { return e['일정ID']; });
+  if (!ids.length) throw userError_('옮길 일정을 골라 주세요.');
+  var n = updateRowsSame_('일정', ids, { '구분': '협력 수업' }, actor, '협력 수업으로 옮김 ' + ids.length + '건');
+  return { moved: n };
 }
 
 // ---------------------------------------------------------------- 월별 중점지도
@@ -733,6 +808,7 @@ function parseKind_(v) {
   if (!s) return '';
   if (/공휴/.test(s)) return '공휴일';
   if (/휴업|휴교|재량/.test(s)) return '휴업일';
+  if (/협력/.test(s)) return '협력 수업';
   if (/교육활동|활동|교육/.test(s)) return '교육활동';
   if (/회의|협의/.test(s)) return '회의';
   if (/행사/.test(s)) return '행사';

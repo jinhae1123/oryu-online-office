@@ -977,8 +977,8 @@
   }
 
   // ------------------------------------------------------------ 협력 수업
-  // 행사 이름에 '협력 수업'(띄어 쓰지 않아도)이 들어간 일정. 따로 구분을 고르지 않아도 이름만으로 나눈다
-  function isCoop(e) { return /협력\s*수업/.test(e.title || ''); }
+  // 구분이 '협력 수업'이거나, 이름에 '협력 수업'(띄어 쓰지 않아도)이 들어간 일정
+  function isCoop(e) { return e.kind === '협력 수업' || /협력\s*수업/.test(e.title || ''); }
   /** '2학년 초등예술하나 협력 수업 (칼림바)' → { grade: '2학년', name: '초등예술하나 (칼림바)' } */
   function coopParts(e) {
     var t = String(e.title || ''), g = t.match(/(\d)\s*학년/);
@@ -1252,7 +1252,9 @@
         return '<button type="button" data-sched-view="' + v[0] + '" aria-pressed="' + (sc.view === v[0]) + '">' + v[1] + '</button>';
       }).join('') + '</div>' +
       '<button type="button" class="btn btn-sm" data-action="print">' + icon('print', 18) + '인쇄</button>' +
-      (canManageMe() ? '<button type="button" class="btn btn-sm" data-go="upload">' + icon('upload', 18) + '학사일정 올리기</button>' : '') + '</div>' +
+      (canManageMe() ? '<button type="button" class="btn btn-sm" data-go="upload">' + icon('upload', 18) + '학사일정 올리기</button>' +
+        (sc.view === 'plan' ? '<button type="button" class="btn btn-sm" data-action="plan-import">' + icon('upload', 18) + '월 중 계획 올리기</button>' : '') +
+        '<button type="button" class="btn btn-sm" data-action="coop-tidy">협력 수업 정리</button>' : '') + '</div>' +
       '<div id="sched-body">' + loadingHtml('일정을 불러오는 중이에요') + '</div>' +
       (isPhone() && sc.view === 'cal' ? '<button type="button" class="fab print-hide" data-action="ev-add">' + icon('plus', 20) + '행사 추가</button>' : '');
     loadSched();
@@ -1353,7 +1355,8 @@
       start: qs('#ef-start', form).value, multi: qs('#ef-multi', form).checked, end: qs('#ef-end', form).value,
       time: qs('#ef-time', form).value, title: qs('#ef-title', form).value, kind: kindBtn ? kindBtn.getAttribute('data-kind') : '행사',
       target: qsa('[data-tg][aria-pressed=true]', form).map(function (o) { return o.getAttribute('data-tg'); }),
-      deptId: qs('#ef-dept', form).value, place: qs('#ef-place', form).value, memo: qs('#ef-memo', form).value, important: qs('#ef-imp', form).checked
+      deptId: qs('#ef-dept', form).value, place: qs('#ef-place', form).value, memo: qs('#ef-memo', form).value, important: qs('#ef-imp', form).checked,
+      repeat: !!(qs('#ef-rep', form) && qs('#ef-rep', form).checked), until: qs('#ef-until', form) ? qs('#ef-until', form).value : ''
     };
   }
 
@@ -1393,7 +1396,7 @@
   function calLegend() {
     return '<div class="legend" aria-label="색 설명">' +
       '<span><i class="lg lg-imp"></i>★ 중요</span><span><i class="lg lg-ev"></i>행사·회의</span>' +
-      '<span><i class="lg lg-act"></i>교육활동</span><span><i class="lg lg-off"></i>휴업일·공휴일</span></div>';
+      '<span><i class="lg lg-act"></i>교육활동</span><span><i class="lg lg-coop"></i>협력 수업</span><span><i class="lg lg-off"></i>휴업일·공휴일</span></div>';
   }
 
   function calGrid(shown) {
@@ -1722,7 +1725,7 @@
       ['메모', e.memo],
       ['넣은 사람', (e.by || '') + (e.at ? ' · ' + e.at.slice(0, 16) : '') + (e.editedAt ? ' (고침 ' + e.editedAt.slice(0, 16) + ')' : '')]
     ].filter(function (r) { return r[1]; });
-    openModal('<div class="row-btns"><span class="chip' + (isOff(e) ? ' chip-red' : e.kind === '교육활동' ? ' chip-ok' : '') + '">' + esc(e.kind) + '</span>' +
+    openModal('<div class="row-btns"><span class="chip' + (isOff(e) ? ' chip-red' : isCoop(e) ? ' chip-warn' : e.kind === '교육활동' ? ' chip-ok' : '') + '">' + esc(e.kind) + '</span>' +
       (e.important ? '<span class="chip chip-accent-solid">★ 중요</span>' : '') + '</div>' +
       '<h2 id="m-title">' + esc(e.title) + '</h2>' +
       '<dl class="ev-dl">' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + esc(r[1]).replace(/\n/g, '<br>') + '</dd>'; }).join('') + '</dl>' +
@@ -1790,10 +1793,13 @@
       '<datalist id="ef-times">' + times.map(function (t) { return '<option value="' + t + '">'; }).join('') + '</datalist></div></div>' +
       '<label class="check"><input type="checkbox" id="ef-multi"' + (multi ? ' checked' : '') + '>여러 날 이어지는 행사예요</label>' +
       '<div class="field" id="ef-end-box"' + (multi ? '' : ' hidden') + '><label class="label" for="ef-end">끝나는 날</label><input id="ef-end" class="input" type="date" value="' + esc(endV || '') + '"></div>' +
+      (init.id ? '' : '<label class="check"><input type="checkbox" id="ef-rep"' + (dr && dr.repeat ? ' checked' : '') + '>매주 같은 요일에 반복해요</label>' +
+        '<div class="field" id="ef-rep-box"' + (dr && dr.repeat ? '' : ' hidden') + '><label class="label" for="ef-until">반복 끝나는 날</label><input id="ef-until" class="input" type="date" value="' + esc((dr && dr.until) || '') + '">' +
+        '<p class="hint">한 주에 하나씩 따로 들어가서 하나씩 고치거나 지울 수 있어요. 30번까지 넣을 수 있어요.</p></div>') +
       '<div class="field"><label class="label" for="ef-title">행사 이름 <span class="req">*</span></label><input id="ef-title" class="input" maxlength="60" value="' + esc(vTitle) + '" autocomplete="off"></div>' +
       '<label class="check imp-check"><input type="checkbox" id="ef-imp"' + (vImp ? ' checked' : '') + '>' + starHtml() + '중요 일정이에요 <span class="faint">(달력·홈에 눈에 띄게 보여요)</span></label>' +
       '<div class="field"><span class="label">구분</span><div class="seg" role="group" aria-label="구분">' +
-      ['행사', '교육활동', '회의', '휴업일', '공휴일'].map(function (k) {
+      ['행사', '교육활동', '회의', '협력 수업', '휴업일', '공휴일'].map(function (k) {
         var lock = (k === '휴업일' || k === '공휴일') && !canOff;
         return '<button type="button" data-kind="' + k + '" aria-pressed="' + (kind === k) + '"' + (lock ? ' disabled title="연구부장·부담당만 넣을 수 있어요"' : '') + '>' + k + '</button>';
       }).join('') + '</div>' +
@@ -1818,10 +1824,12 @@
     function preview() {
       var s = qs('#ef-start', form).value, k = selKind();
       if (!s) { qs('#ef-preview', form).innerHTML = ''; return; }
-      var col = k === '교육활동' ? '교육활동 칸' : '행사 칸';
+      var col = k === '교육활동' ? '교육활동 칸' : k === '협력 수업' ? '협력 수업 칸' : '행사 칸';
+      var reps = repeatCount(form);
       qs('#ef-preview', form).innerHTML = '<p class="faint" style="margin-bottom:6px">저장하면 이렇게 들어가요</p>' +
         '<p class="ok-line">' + icon('check', 16) + '연간 학사일정 · ' + esc(mdw(s)) + '</p>' +
         '<p class="ok-line">' + icon('check', 16) + Number(s.slice(5, 7)) + '월 월별 계획 · ' + dayNum(s) + '일 ' + col + '</p>' +
+        (reps > 1 ? '<p class="ok-line">' + icon('check', 16) + '매주 ' + DOW.charAt(wd(s)) + '요일 · ' + reps + '번 들어가요</p>' : reps > 30 ? '<p class="err">30번까지 넣을 수 있어요</p>' : '') +
         (k === '휴업일' || k === '공휴일' ? '<p class="ok-line">' + icon('check', 16) + '이날은 수업일수에서 빠져요</p>' : '') +
         (qs('#ef-imp', form).checked ? '<p class="ok-line">' + icon('check', 16) + '★ 중요 일정으로 눈에 띄게 보여요</p>' : '');
     }
@@ -1845,6 +1853,13 @@
       if (ev.target.checked && !qs('#ef-end', form).value) qs('#ef-end', form).value = qs('#ef-start', form).value;
     });
     qs('#ef-start', form).addEventListener('change', preview);
+    if (qs('#ef-rep', form)) {
+      qs('#ef-rep', form).addEventListener('change', function (ev) {
+        qs('#ef-rep-box', form).hidden = !ev.target.checked;
+        preview();
+      });
+      qs('#ef-until', form).addEventListener('change', preview);
+    }
     qs('#ef-imp', form).addEventListener('change', preview);
     preview();
     if (!dr) setTimeout(function () { var t = qs('#ef-title', form); if (t && !init.id) t.focus(); }, 30);
@@ -1867,18 +1882,75 @@
       };
       if (!fields.start) { err.textContent = '날짜를 골라 주세요.'; return; }
       if (!fields.title.trim()) { err.textContent = '행사 이름을 적어 주세요.'; qs('#ef-title', form).focus(); return; }
+      var rep = qs('#ef-rep', form) && qs('#ef-rep', form).checked, until = rep ? qs('#ef-until', form).value : '';
+      if (rep && !until) { err.textContent = '반복 끝나는 날을 골라 주세요.'; qs('#ef-until', form).focus(); return; }
+      if (rep && until < fields.start) { err.textContent = '반복 끝나는 날이 날짜보다 앞에 있어요.'; return; }
+      if (rep && repeatCount(form) > 30) { err.textContent = '매주 반복은 30번까지 넣을 수 있어요. 끝나는 날을 앞당겨 주세요.'; return; }
       var btn = form.querySelector('[type=submit]');
       busy(btn, true, '저장하는 중');
-      server('sched.save', { id: init.id || '', fields: fields }, schedThen(fields.start)).then(function (saved) {
+      server('sched.save', { id: init.id || '', fields: fields, repeatUntil: until }, schedThen(fields.start)).then(function (saved) {
         S.sched.form = null;
         patchEvent(saved);
         closeModal();
         var t = saved.start;
         if (S.screen === 'schedule' && S.sched.view !== 'year') { S.sched.y = +t.slice(0, 4); S.sched.m = +t.slice(5, 7); S.sched.week = mondayOf(t); S.sched.day = t; }
         reloadSched();
-        toast(saved.title + josa(saved.title, '을', '를') + ' ' + (init.id ? '고쳤어요' : '넣었어요'));
+        toast(saved.title + josa(saved.title, '을', '를') + ' ' + (init.id ? '고쳤어요' : saved.repeated ? '매주 ' + saved.repeated + '번 넣었어요' : '넣었어요'));
       }).catch(function (e2) { busy(btn, false); err.textContent = e2.message; });
     });
+  }
+
+  /** 반복을 켰으면 시작일부터 끝나는 날까지 매주 몇 번인지(끄거나 날이 비면 1) */
+  function repeatCount(form) {
+    var on = qs('#ef-rep', form), s = qs('#ef-start', form).value, u = on && on.checked ? qs('#ef-until', form).value : '';
+    if (!s || !u || u < s) return 1;
+    return Math.floor((Date.parse(u) - Date.parse(s)) / (7 * 86400000)) + 1;
+  }
+
+  // ------------------------------------------------------------ 협력 수업 정리 (관리)
+  // 월 중 계획에서 옮긴 협력 수업('3학년 초등예술하나(1-4교시)' 등)은 이름에 '협력 수업'이 없어 교육활동에 섞여 있다.
+  // 같은 이름끼리 묶어 보여 주고(초등예술하나·문예체·칼림바·우쿨렐레는 미리 체크), 고른 것을 구분 '협력 수업'으로 한 번에 바꾼다
+  function openCoopTidy() {
+    openModal('<h2 id="m-title">협력 수업 정리</h2><div id="coop-box">' + loadingHtml('일정을 살펴보는 중이에요') + '</div>', { wide: true });
+    server('sched.coop.list', {}).then(function (d) {
+      var box = qs('#coop-box');
+      if (!box) return;
+      var row = function (g) {
+        return '<label class="coop-pick"><input type="checkbox" value="' + esc(g.key) + '"' + (g.hint ? ' checked' : '') + '>' +
+          '<span class="coop-pick-t">' + esc(g.title) + '</span><span class="faint">' + esc(g.kind) + ' · ' + g.count + '번 · ' +
+          esc(md(g.first) + (g.last !== g.first ? ' ~ ' + md(g.last) : '')) + '</span></label>';
+      };
+      var hint = d.groups.filter(function (g) { return g.hint; }), rest = d.groups.filter(function (g) { return !g.hint; });
+      box.innerHTML = '<p class="muted" style="margin:0">체크한 일정을 구분 \'협력 수업\'으로 옮겨요. 같은 이름은 모두 함께 옮겨지고, 홈의 협력 수업 카드와 월별 계획의 협력 수업 칸으로 가요. 잘못 옮긴 것은 그 일정을 눌러 구분을 고치면 돼요.</p>' +
+        '<div class="coop-list">' + (hint.length ? '<p class="coop-sub">협력 수업으로 보이는 것 (초등예술하나·문예체·칼림바·우쿨렐레)</p>' + hint.map(row).join('') : '<p class="faint">미리 고른 것이 없어요.</p>') +
+        (rest.length ? '<details class="coop-more"><summary>다른 행사·교육활동 ' + rest.length + '개에서 더 고르기</summary>' +
+          '<input class="input input-sm" id="coop-q" placeholder="이름으로 찾기" style="width:100%;margin:8px 0">' + rest.map(row).join('') + '</details>' : '') + '</div>' +
+        '<p class="err" id="coop-err" role="alert"></p>' +
+        '<div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="button" class="btn btn-primary" id="coop-go"></button></div>';
+      var picked = function () { return qsa('.coop-pick input:checked', box).map(function (i) { return i.value; }); };
+      var count = function () {
+        var keys = picked(), n = 0;
+        d.groups.forEach(function (g) { if (keys.indexOf(g.key) >= 0) n += g.count; });
+        qs('#coop-go').textContent = n + '개 옮기기';
+        qs('#coop-go').disabled = !n;
+      };
+      box.addEventListener('change', count);
+      var q = qs('#coop-q');
+      if (q) q.addEventListener('input', function () {
+        var v = q.value.replace(/\s+/g, '');
+        qsa('.coop-more .coop-pick', box).forEach(function (l) { l.hidden = !!v && l.textContent.replace(/\s+/g, '').indexOf(v) < 0; });
+      });
+      count();
+      qs('#coop-go').addEventListener('click', function () {
+        var btn = qs('#coop-go');
+        busy(btn, true, '옮기는 중');
+        server('sched.coop.move', { keys: picked() }).then(function (r) {
+          closeModal();
+          reloadSched();
+          toast('협력 수업으로 ' + r.moved + '개 옮겼어요');
+        }).catch(function (e) { busy(btn, false); qs('#coop-err').textContent = e.message; });
+      });
+    }).catch(function (e) { var box = qs('#coop-box'); if (box) box.innerHTML = failHtml(e); });
   }
 
   function cancelEventForm() {
@@ -3207,6 +3279,7 @@
           : '<p class="ok-text">넣을 링크가 없어요. 모두 들어가 있어요.</p>') + '</section><section class="card" id="meet-imp"></section><section class="card" id="plan-imp"></section></div>';
       meetImportCard(qs('#meet-imp'));
       planImportCard(qs('#plan-imp'));
+      if (S.jump === 'plan-imp') { S.jump = ''; qs('#plan-imp').scrollIntoView({ block: 'start' }); } // 월별 계획의 '월 중 계획 올리기'로 왔을 때
       var go = qs('#site-go');
       if (go) go.addEventListener('click', function () {
         confirmBox('링크 ' + news.length + '개를 넣을까요?', esc(p.year) + '학년도 자료실에 종합사이트 링크 ' + news.length + '개를 카드로 넣어요.', '넣기', function () {
@@ -3331,6 +3404,7 @@
     box.innerHTML = '<h2>월 중 계획 가져오기</h2>' +
       '<p class="muted" style="margin:0">예전 \'월 중 행사 및 교육계획\'을 일정 › 월별 계획으로 옮겨요. 엑셀 파일을 고르거나 구글 시트 주소를 넣고 \'살펴보기\'를 누르세요.</p>' +
       '<ul class="guide-list"><li>행사 칸은 구분 \'행사\', 교육활동 칸은 \'교육활동\', 부장회의·교직원회의 칸은 \'회의\'로 넣어요. 한 칸의 여러 줄은 한 줄씩 따로 넣어요.</li>' +
+      '<li>교육활동 칸의 초등예술하나·문예체·칼림바·우쿨렐레·협력 수업은 \'협력 수업\'으로 넣어요.</li>' +
       '<li>\'부장 회의 (15:00, 교장실)\'처럼 끝 괄호의 시각·장소는 시간·장소 칸으로 나눠요.</li>' +
       '<li>보안관(오전·오후)과 당직은 월별 계획 표의 칸으로 보여요.</li>' +
       '<li>같은 날 이름이 같은 일정이 이미 있으면(학사일정의 공휴일 등) 넣지 않아요. 여러 번 눌러도 괜찮아요.</li></ul>' +
@@ -3769,7 +3843,7 @@
       '<div class="field"><label class="label" for="ue-dept">담당 부서</label><select id="ue-dept" class="input"><option value="">(없음)</option>' +
       U.depts.filter(function (d) { return d.active; }).map(function (d) { return '<option' + (d.name === v.dept ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select></div></div>' +
      '<div class="form-grid"><div class="field"><label class="label" for="ue-kind">구분</label><select id="ue-kind" class="input">' +
-      ['행사', '교육활동', '회의', '휴업일', '공휴일'].map(function (k) { return '<option' + (k === v.kind ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>' +
+      ['행사', '교육활동', '회의', '협력 수업', '휴업일', '공휴일'].map(function (k) { return '<option' + (k === v.kind ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>' +
       inp('memo', '메모', ' maxlength="300"') + '</div>' +
       '<label class="check"><input type="checkbox" id="ue-imp"' + (x.important ? ' checked' : '') + '>중요 일정</label>' +
       '<div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button><button type="submit" class="btn btn-primary">고친 대로 다시 확인</button></div></form>', { wide: true });
@@ -4810,7 +4884,7 @@
   // ------------------------------------------------------------ 관리자 · 점검 › 속도 재기
   var CALL_NAMES = {
     start: '시작', boot: '처음 열기', session: '로그인 확인', login: '로그인', verify: '이름 고르기', home: '홈',
-    'sched.month': '일정(달력)', 'sched.year': '연간 학사일정', 'sched.save': '일정 저장', 'sched.delete': '일정 지우기', 'focus.save': '중점지도 저장',
+    'sched.month': '일정(달력)', 'sched.year': '연간 학사일정', 'sched.save': '일정 저장', 'sched.delete': '일정 지우기', 'sched.coop.list': '협력 수업 정리', 'sched.coop.move': '협력 수업으로 옮기기', 'focus.save': '중점지도 저장',
     'students.save': '학생 수 저장', 'survey.list': '조사 목록', 'survey.get': '조사 보기', 'survey.respond': '조사 응답', 'survey.save': '조사 만들기·고치기',
     'lib.list': '자료실', 'lib.save': '자료 넣기·고치기', 'lib.delete': '자료 지우기', 'notice.list': '공지', 'notice.save': '공지 쓰기·고치기',
     'help.list': '도움말', 'help.save': '도움말 쓰기·고치기', 'staff.list': '교직원', search: '찾기', 'admin.check': '점검', adminLogin: '관리자 들어가기', 'admin.staff.list': '교직원 표(관리자)', 'admin.staff.import': '명단 한 번에 넣기', 'admin.staff.importCheck': '명단 미리보기', 'admin.site.preview': '종합사이트 링크 미리보기', 'admin.site.import': '종합사이트 링크 넣기', 'meet.list': '회의록', 'meet.save': '회의 만들기·고치기', 'meet.delete': '회의 지우기', 'meet.entry.save': '회의록 쓰기', 'meet.entry.delete': '회의록 항목 지우기', 'meet.entry.move': '회의록 순서 바꾸기', 'admin.meet.preview': '회의록 가져오기 미리보기', 'admin.meet.import': '회의록 가져오기', 'admin.plan.preview': '월 중 계획 미리보기', 'admin.plan.import': '월 중 계획 가져오기', 'duty.save': '보안관·당직 고치기', batch: '미리 받기(뒤에서)',
@@ -5105,6 +5179,8 @@
       case 'cat-active': catActive(id, t.getAttribute('data-on') === '1'); break;
       case 'ev-open': closeModal(); openEvent(t.getAttribute('data-ev')); break;
       case 'ev-edit': closeModal(); startEventForm({ id: t.getAttribute('data-ev') }); break;
+      case 'plan-import': S.adminTab = 'import'; S.jump = 'plan-imp'; go('admin'); break;
+      case 'coop-tidy': openCoopTidy(); break;
       case 'ev-add':
         var sc = S.sched, today = localToday();
         var d0 = t.getAttribute('data-day') || (S.screen === 'schedule' && isPhone() && !sc.phoneMonth ? sc.day
