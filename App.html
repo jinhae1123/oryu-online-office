@@ -740,7 +740,7 @@
       '<header class="topbar print-hide"><span class="brand-mark emblem" aria-hidden="true"></span><span class="topbar-name">온라인 교무실</span>' +
       '<button type="button" class="icon-btn" data-action="theme-toggle" aria-label="' + (root.getAttribute('data-theme') === 'dark' ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기') + '">' +
       icon(root.getAttribute('data-theme') === 'dark' ? 'sun' : 'moon') + '</button></header>' +
-      '<main class="main" id="main" tabindex="-1"><div class="wrap" id="screen"></div></main>' +
+      '<main class="main" id="main" tabindex="-1"><div class="wrap' + (S.screen === 'home' ? ' wrap-wide' : '') + '" id="screen"></div></main>' + // 홈은 '내가 할 일' 사이드바까지 화면 너비를 다 쓴다
       '<nav class="bottom-nav print-hide" aria-label="주 메뉴">' +
       ['home', 'schedule', 'survey', 'library'].map(function (id) {
         var x = menuItem(id);
