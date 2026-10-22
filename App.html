@@ -2660,7 +2660,7 @@
   }
 
   // ============================================================ 자료실
-  S.lib = { data: null, view: 'now', q: '', dept: '', kind: '', year: '', openId: '' };
+  S.lib = { data: null, view: 'now', q: '', dept: 'common', kind: '', year: '', openId: '' };
 
   SCREENS.library = function ($s) {
     $s.innerHTML = pageHead('', '자료실', '', '<button type="button" class="btn btn-primary print-hide" data-action="lib-new">' + icon('plus', 18) + '자료 넣기</button>') +
@@ -2708,9 +2708,11 @@
     var used = {};
     d.items.forEach(function (i) { if (L.view === 'now' ? !i.archived : i.archived && i.year === L.year) used[i.deptId] = true; });
     var depts = d.depts.filter(function (dp) { return dp.active || used[dp.id]; });
-    if (L.dept && !depts.some(function (dp) { return dp.id === L.dept; })) L.dept = '';
-    if (!depts.length) return '';
-    return '<div class="tgs print-hide" role="group" aria-label="부서">' + [{ id: '', name: '전체' }].concat(depts).map(function (dp) {
+    var hasCommon = d.items.some(function (i) { return i.common && (L.view === 'now' ? !i.archived : i.archived && i.year === L.year); });
+    if (L.dept === 'common' ? !hasCommon : L.dept && !depts.some(function (dp) { return dp.id === L.dept; })) L.dept = '';
+    if (!depts.length && !hasCommon) return '';
+    // 공통 자료는 맨 앞 '공통' 탭에서만 본다(전체·부서 탭에는 찾을 때만 함께 나온다)
+    return '<div class="tgs print-hide" role="group" aria-label="부서">' + (hasCommon ? [{ id: 'common', name: '공통' }] : []).concat([{ id: '', name: '전체' }], depts).map(function (dp) {
       return '<button type="button" class="tg" data-action="lib-dept" data-id="' + esc(dp.id) + '" aria-pressed="' + (L.dept === dp.id) + '">' + esc(dp.name) + '</button>';
     }).join('') + '</div>';
   }
@@ -2720,7 +2722,9 @@
     if (!box || !d) return;
     var scope = d.items.filter(function (i) { return L.view === 'now' ? !i.archived : i.archived && i.year === L.year; });
     var list = scope.filter(function (i) {
-      if (L.dept && i.deptId !== L.dept && !i.common) return false; // 공통 자료는 부서로 걸러도 맨 위에 그대로
+      if (L.dept === 'common') { if (!i.common) return false; }
+      else if (i.common && !L.q) return false; // 공통 자료는 '공통' 탭에서. 찾을 때는 어느 탭에서나 함께
+      else if (L.dept && i.deptId !== L.dept) return false;
       if (L.kind && i.kindId !== L.kind) return false;
       return textMatch(L.q, [i.title, i.desc, i.owner, i.dept, i.kind, i.fileName]);
     });
@@ -5264,7 +5268,7 @@
       case 'sr-lib':
         if (S.screen === 'library' && S.lib.data) { openLib(id); break; }
         var li = libById(id);
-        S.lib.openId = id; S.lib.q = ''; S.lib.dept = ''; S.lib.kind = '';
+        S.lib.openId = id; S.lib.q = ''; S.lib.dept = li && li.common ? 'common' : ''; S.lib.kind = '';
         S.lib.view = li && li.archived ? 'archive' : 'now'; S.lib.year = li ? li.year : '';
         go('library');
         break;
