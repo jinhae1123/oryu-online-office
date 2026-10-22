@@ -6,6 +6,8 @@
  *   폴더·파일은 아무와도 공유하지 않고, 웹앱(공통 비밀번호 로그인)을 거쳐서만 내려받는다.
  * - 넣기: 이름을 고른 교직원 누구나. 고치기·지우기: 처음 넣은 분과 관리(역할 '관리' 또는 관리자 화면)
  * - 공통 자료: 넣는 누구나 '공통'으로 표시할 수 있다. 자료실 맨 앞 '공통' 탭에 '공통 순서' 번호 → 제목 순으로 보인다
+ * - 자료실 탭: 부서 탭은 부서 목록에서 저절로 생기고, 관리는 '자료실 탭'(분류 종류)을 더 만들 수 있다.
+ *   자료에 추가 탭을 고르면(탭ID) 자기 부서 탭과 그 추가 탭에 함께 보인다
  * - 새 학년도 넘기기(관리자): 지금 학년도 자료를 모두 보관함으로 보내고, 고른 자료만 새 학년도로 옮겨 적는다.
  *   옮긴 자료는 같은 파일을 가리키고(파일을 복사하지 않음), 처음 넣은 분이 계속 고칠 수 있다.
  * - 파일은 지우지 않는다. 자료를 지우거나 파일을 바꿔도 드라이브 파일은 그대로 남고, 기록 탭에 파일ID가 남는다.
@@ -125,7 +127,7 @@ function apiFileGet_(args, actor, ctx) {
 // ---------------------------------------------------------------- 자료 읽기
 
 function libCache_() {
-  return { depts: categoryNames_('부서'), kinds: categoryNames_('자료 분류'), names: staffNames_(), year: libYear_() };
+  return { depts: categoryNames_('부서'), kinds: categoryNames_('자료 분류'), tabs: categoryNames_('자료실 탭'), names: staffNames_(), year: libYear_() };
 }
 
 /** 화면에 보낼 자료 한 줄(파일ID는 보내지 않는다) */
@@ -137,6 +139,8 @@ function libView_(r, ctx, c) {
     dept: c.depts[r['부서ID']] || '',
     kindId: r['분류ID'],
     kind: c.kinds[r['분류ID']] || '',
+    tabId: r['탭ID'] || '',
+    tab: c.tabs[r['탭ID']] || '',
     title: r['제목'],
     desc: r['설명'],
     link: r['링크'],
@@ -164,6 +168,7 @@ function apiLibList_(args, actor, ctx) {
     items: items,
     depts: deptOptions_(),
     kinds: catOptions_('자료 분류'),
+    tabs: catOptions_('자료실 탭'),
     canManage: canManage_(ctx),
     maxMb: fileLimitMb_()
   };
@@ -195,12 +200,14 @@ function apiLibSave_(args, actor, ctx) {
     '설명': cleanText_(f['설명'], 500, '설명'),
     '부서ID': checkCat_(f['부서ID'], '부서', '부서'),
     '분류ID': checkCat_(f['분류ID'], '자료 분류', '자료 분류'),
+    '탭ID': checkCat_(f['탭ID'], '자료실 탭', '추가 탭'),
     '담당': cleanText_(f['담당'], 20, '담당'),
     '공통': f.common ? '예' : '',
     '공통 순서': f.common ? cleanText_(f.commonOrder, 3, '공통 순서') : ''
   };
   if (rec['공통 순서'] && !/^\d+$/.test(rec['공통 순서'])) throw userError_('공통 순서는 숫자로 적어 주세요.');
   if (f.common === undefined) { delete rec['공통']; delete rec['공통 순서']; } // 예전 화면에서 보낸 요청은 공통 표시를 건드리지 않음
+  if (f['탭ID'] === undefined) delete rec['탭ID'];
   var row = null;
   if (args.id) {
     row = findRow_('자료', String(args.id));
@@ -237,6 +244,17 @@ function apiLibSave_(args, actor, ctx) {
   return libView_(findRow_('자료', saved['자료ID']), ctx, libCache_());
 }
 
+/** 자료실 추가 탭 만들기(관리). args = { name } → 탭 목록 */
+function apiLibTabAdd_(args, actor, ctx) {
+  if (!canManage_(ctx)) throw userError_('탭은 연구부장·부담당이 만들어요.', 'FORBIDDEN');
+  var name = cleanText_(args.name, 20, '탭 이름', true);
+  if (deptOptions_().some(function (d) { return d.name === name; })) throw userError_('같은 이름의 부서 탭이 이미 있어요.');
+  if (name === '공통' || name === '전체') throw userError_("'" + name + "'" + josa_(name, '은', '는') + ' 이미 있는 탭이에요.');
+  var order = catOptions_('자료실 탭').length + 1;
+  var row = adminCategorySave_({ kind: '자료실 탭', name: name, order: String(order) }, actor);
+  return { id: row['분류ID'], tabs: catOptions_('자료실 탭') };
+}
+
 function apiLibDelete_(args, actor, ctx) {
   var row = findRow_('자료', String(args.id || ''));
   if (!row || row['삭제 여부']) throw userError_('자료를 찾지 못했어요. 화면을 새로 고쳐 주세요.', 'NOTFOUND');
@@ -266,7 +284,7 @@ function apiLibUnarchive_(args, actor, ctx) {
 
 function libCopyObj_(row, year) {
   var o = {};
-  ['분류ID', '부서ID', '제목', '설명', '링크', '파일ID', '담당', '파일 이름', '파일 크기', '홈에 보이기', '공통', '공통 순서', '입력자ID', '입력 시각', '수정자ID', '수정 시각'].forEach(function (h) {
+  ['분류ID', '부서ID', '제목', '설명', '링크', '파일ID', '담당', '파일 이름', '파일 크기', '홈에 보이기', '공통', '공통 순서', '탭ID', '입력자ID', '입력 시각', '수정자ID', '수정 시각'].forEach(function (h) {
     o[h] = row[h] || '';
   });
   o['학년도'] = year;
