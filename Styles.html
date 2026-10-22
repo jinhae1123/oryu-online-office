@@ -928,4 +928,16 @@ html.design-anim,html.design-anim *{transition:background-color .35s ease,border
   .home-main>:not(.home-top){order:2}
 }
 @container home (max-width: 819px){ .home-top{grid-template-columns:minmax(0,1fr)} }
+/* ---------- 협력 수업: 달력 색 설명·정리 창 / 일정 고치기 창의 저장 단추는 늘 아래에 ---------- */
+.lg-coop{background:var(--c-warnBg);border:1px solid var(--c-warnFg)}
+.coop-list{display:flex;flex-direction:column;gap:4px;max-height:50vh;overflow:auto}
+.coop-sub{margin:4px 0;font-size:14px;font-weight:700;color:var(--c-t3)}
+.coop-pick{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:8px 10px;border-radius:10px;cursor:pointer}
+.coop-pick:hover{background:var(--c-card2)}
+.coop-pick[hidden]{display:none}
+.coop-pick input{align-self:center}
+.coop-pick-t{font-weight:700}
+.coop-more summary{padding:8px 10px;font-weight:700;cursor:pointer}
+#ev-form .modal-btns{position:sticky;bottom:-24px;z-index:2;margin:0 -24px -24px;padding:12px 24px 24px;background:var(--c-card);border-top:1px solid var(--c-line)}
+@media (max-width:899px){ #ev-form .modal-btns{bottom:-20px;margin:0 -20px -20px;padding:12px 20px 20px} }
 </style>
