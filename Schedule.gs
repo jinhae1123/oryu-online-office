@@ -182,7 +182,7 @@ function apiSchedYear_(args, actor, ctx) {
   return {
     year: y,
     today: todayYmd_(),
-    events: eventsBetween_(r.from, r.to, ctx),
+    events: eventsBetween_(r.from, r.to, ctx).filter(function (e) { return !isCoopEvent_(e); }), // 협력 수업은 월별 계획에만
     days: semesterDays_(y),
     canManage: canManage_(ctx),
     depts: deptOptions_()
@@ -328,6 +328,11 @@ function apiSchedDelete_(args, actor, ctx) {
 // 행사·교육활동을 같은 이름끼리 묶어 보여 주고, 고른 묶음을 구분 '협력 수업'으로 한 번에 바꾼다
 var COOP_HINT_ = /초등예술하나|문예체|칼림바|우쿨렐레|협력\s*수업/;
 var COOP_NOT_ = /협력\s*(강사|교사)/; // '협력강사 시작', '협력교사 협의회'는 수업이 아니다
+
+/** 화면에 보낼 일정(eventView_)이 협력 수업인지: 구분이 '협력 수업'이거나 이름에 '협력 수업'(띄어 쓰지 않아도) */
+function isCoopEvent_(e) {
+  return e.kind === '협력 수업' || /협력\s*수업/.test(e.title || '');
+}
 
 function coopKey_(title) {
   return String(title || '').replace(/\s+/g, '');

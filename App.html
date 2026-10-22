@@ -1702,7 +1702,7 @@
       '<div class="year-grid">' + months.map(function (m) {
         var y = m >= 3 ? d.year : d.year + 1;
         var ym = y + '-' + ('0' + m).slice(-2);
-        var list = d.events.filter(function (e) { return e.start.slice(0, 7) === ym || (e.start.slice(0, 7) < ym && e.end.slice(0, 7) >= ym); });
+        var list = d.events.filter(function (e) { return !isCoop(e) && (e.start.slice(0, 7) === ym || (e.start.slice(0, 7) < ym && e.end.slice(0, 7) >= ym)); }); // 협력 수업은 월별 계획에만
         return '<section class="card ymonth"><h3>' + m + '월</h3>' + (list.length ? '<ul class="ylist">' + list.map(function (e) {
           var s = e.start.slice(0, 7) < ym ? ym + '-01' : e.start;
           return '<li class="' + (isOff(e) ? 'off' : '') + '"><span class="yd">' + dayNum(s) + ' ' + DOW.charAt(wd(s)) + '</span>' +
@@ -1787,7 +1787,7 @@
     box.innerHTML = '<form class="form" id="ev-form" novalidate>' +
       '<div class="card-head"><h2 id="m-title">' + (init.id ? '행사 고치기' : '행사 추가') + '</h2>' +
       '<button type="button" class="icon-btn" data-action="ev-cancel" aria-label="닫기">' + icon('x') + '</button></div>' +
-      '<p class="note">' + icon('info', 18) + '<span>한 번만 넣으면 연간 학사일정과 월별 계획에 함께 들어가요.</span></p>' +
+      '<p class="note">' + icon('info', 18) + '<span>한 번만 넣으면 연간 학사일정과 월별 계획에 함께 들어가요. 협력 수업은 월별 계획에만 들어가요.</span></p>' +
       '<div class="form-grid2"><div class="field"><label class="label" for="ef-start">날짜</label><input id="ef-start" class="input" type="date" value="' + esc(start) + '"></div>' +
       '<div class="field"><label class="label" for="ef-time">시간</label><input id="ef-time" class="input" list="ef-times" maxlength="20" value="' + esc(vTime) + '" placeholder="예: 5교시, 15:00">' +
       '<datalist id="ef-times">' + times.map(function (t) { return '<option value="' + t + '">'; }).join('') + '</datalist></div></div>' +
@@ -1827,7 +1827,7 @@
       var col = k === '교육활동' ? '교육활동 칸' : k === '협력 수업' ? '협력 수업 칸' : '행사 칸';
       var reps = repeatCount(form);
       qs('#ef-preview', form).innerHTML = '<p class="faint" style="margin-bottom:6px">저장하면 이렇게 들어가요</p>' +
-        '<p class="ok-line">' + icon('check', 16) + '연간 학사일정 · ' + esc(mdw(s)) + '</p>' +
+        (k === '협력 수업' ? '' : '<p class="ok-line">' + icon('check', 16) + '연간 학사일정 · ' + esc(mdw(s)) + '</p>') +
         '<p class="ok-line">' + icon('check', 16) + Number(s.slice(5, 7)) + '월 월별 계획 · ' + dayNum(s) + '일 ' + col + '</p>' +
         (reps > 1 ? '<p class="ok-line">' + icon('check', 16) + '매주 ' + DOW.charAt(wd(s)) + '요일 · ' + reps + '번 들어가요</p>' : reps > 30 ? '<p class="err">30번까지 넣을 수 있어요</p>' : '') +
         (k === '휴업일' || k === '공휴일' ? '<p class="ok-line">' + icon('check', 16) + '이날은 수업일수에서 빠져요</p>' : '') +
