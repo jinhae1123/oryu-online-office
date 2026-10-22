@@ -83,6 +83,7 @@ function routes_() {
     'lib.save': { need: 'identity', fn: 'apiLibSave_' },
     'lib.delete': { need: 'identity', fn: 'apiLibDelete_' },
     'lib.unarchive': { need: 'identity', fn: 'apiLibUnarchive_' },
+    'lib.tab.add': { need: 'identity', fn: 'apiLibTabAdd_' },
     'file.get': { need: 'login', fn: 'apiFileGet_' },
     'help.list': { need: 'login', fn: 'apiHelpList_' },
     'help.save': { need: 'identity', fn: 'apiHelpSave_' },

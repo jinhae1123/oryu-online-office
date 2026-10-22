@@ -347,6 +347,10 @@ select.input{appearance:auto}
 .tgs{display:flex;flex-wrap:wrap;gap:6px}
 .tg{min-width:44px;min-height:44px;padding:0 12px;border:1px solid var(--c-line2);border-radius:10px;background:var(--c-card);color:var(--c-t1);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
 .tg[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);padding:0 11px}
+/* 자료실 추가 탭(관리가 만든 탭)과 [+ 탭] 단추 */
+.tg-extra{border-style:dashed}
+.tg-extra[aria-pressed="true"]{border-style:solid}
+.tg-add{display:inline-flex;align-items:center;gap:4px;border-style:dashed;color:var(--c-t2);background:transparent}
 .ok-line{display:flex;align-items:center;gap:8px;margin:2px 0;font-size:15px;font-weight:600}
 .ok-line svg{color:var(--c-okFg)}
 .seg button:disabled{opacity:.45;cursor:default}

@@ -2702,19 +2702,60 @@
     drawLibList();
   }
 
-  /** 부서 탭(관리자 화면 부서 목록 순서). '사용 안 함' 부서는 이 보기에 그 부서 자료가 있을 때만 */
+  /** 탭 줄: 공통 · 전체 · 부서 탭(부서 목록에서 저절로) · 추가 탭(관리가 만듦).
+   *  '사용 안 함' 부서·탭은 이 보기에 그 자료가 있을 때만 */
   function libDeptTabs() {
     var L = S.lib, d = L.data;
     var used = {};
-    d.items.forEach(function (i) { if (L.view === 'now' ? !i.archived : i.archived && i.year === L.year) used[i.deptId] = true; });
+    d.items.forEach(function (i) {
+      if (L.view === 'now' ? !i.archived : i.archived && i.year === L.year) { used[i.deptId] = true; if (i.tabId) used[i.tabId] = true; }
+    });
     var depts = d.depts.filter(function (dp) { return dp.active || used[dp.id]; });
+    var tabs = (d.tabs || []).filter(function (t) { return t.active || used[t.id]; });
     var hasCommon = d.items.some(function (i) { return i.common && (L.view === 'now' ? !i.archived : i.archived && i.year === L.year); });
-    if (L.dept === 'common' ? !hasCommon : L.dept && !depts.some(function (dp) { return dp.id === L.dept; })) L.dept = '';
-    if (!depts.length && !hasCommon) return '';
+    var known = function (id) { return depts.concat(tabs).some(function (x) { return x.id === id; }); };
+    if (L.dept === 'common' ? !hasCommon : L.dept && !known(L.dept)) L.dept = '';
+    var addBtn = d.canManage && L.view === 'now' ? '<button type="button" class="tg tg-add" data-action="lib-tab-add">' + icon('plus', 16) + '탭</button>' : '';
+    if (!depts.length && !tabs.length && !hasCommon && !addBtn) return '';
     // 공통 자료는 맨 앞 '공통' 탭에서만 본다(전체·부서 탭에는 찾을 때만 함께 나온다)
-    return '<div class="tgs print-hide" role="group" aria-label="부서">' + (hasCommon ? [{ id: 'common', name: '공통' }] : []).concat([{ id: '', name: '전체' }], depts).map(function (dp) {
-      return '<button type="button" class="tg" data-action="lib-dept" data-id="' + esc(dp.id) + '" aria-pressed="' + (L.dept === dp.id) + '">' + esc(dp.name) + '</button>';
-    }).join('') + '</div>';
+    var btn = function (dp, extra) {
+      return '<button type="button" class="tg' + (extra ? ' tg-extra' : '') + '" data-action="lib-dept" data-id="' + esc(dp.id) + '" aria-pressed="' + (L.dept === dp.id) + '">' + esc(dp.name) + '</button>';
+    };
+    return '<div class="tgs print-hide" role="group" aria-label="자료실 탭">' +
+      (hasCommon ? [{ id: 'common', name: '공통' }] : []).concat([{ id: '', name: '전체' }], depts).map(function (dp) { return btn(dp, false); }).join('') +
+      tabs.map(function (t) { return btn(t, true); }).join('') + addBtn + '</div>';
+  }
+
+  /** 지금 고른 탭이 추가 탭인가 */
+  function libExtraTab(id) {
+    return !!id && (S.lib.data.tabs || []).some(function (t) { return t.id === id; });
+  }
+
+  /** 추가 탭 만들기(관리) */
+  function openLibTabAdd() {
+    openModal('<h2 id="m-title">자료실 탭 만들기</h2>' +
+      '<form class="form" id="lt-form" novalidate>' +
+      '<p class="muted" style="margin:0">부서 탭은 부서 목록에서 저절로 생겨요. 여기서는 부서 말고 더 필요한 탭을 만들어요. 자료 넣기 창에서 이 탭을 고르면 자기 부서 탭과 이 탭에 함께 보여요.</p>' +
+      '<div class="field"><label class="label" for="lt-name">탭 이름 <span class="req">*</span></label>' +
+      '<input id="lt-name" class="input" maxlength="20" placeholder="예: 학년 자료, 연수, 업무 양식" autocomplete="off"></div>' +
+      '<p class="hint">' + icon('info', 16) + '<span>이름 바꾸기·순서·사용 안 함은 관리자 › 분류의 \'자료실 탭\'에서 해요.</span></p>' +
+      '<p class="err" id="lt-err" role="alert"></p>' +
+      '<div class="modal-btns"><button type="button" class="btn" data-action="close-modal">닫기</button>' +
+      '<button type="submit" class="btn btn-primary">만들기</button></div></form>');
+    var form = qs('#lt-form');
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var name = qs('#lt-name').value.trim(), err = qs('#lt-err');
+      if (!name) { err.textContent = '탭 이름을 적어 주세요.'; qs('#lt-name').focus(); return; }
+      var b = form.querySelector('[type=submit]');
+      busy(b, true, '만드는 중');
+      server('lib.tab.add', { name: name }).then(function (r) {
+        S.lib.data.tabs = r.tabs;
+        S.lib.dept = r.id;
+        closeModal(); drawLib();
+        toast('"' + name + '" 탭을 만들었어요');
+      }).catch(function (e) { busy(b, false); err.textContent = e.message; });
+    });
   }
 
   function drawLibList() {
@@ -2723,6 +2764,7 @@
     var scope = d.items.filter(function (i) { return L.view === 'now' ? !i.archived : i.archived && i.year === L.year; });
     var list = scope.filter(function (i) {
       if (L.dept === 'common') { if (!i.common) return false; }
+      else if (libExtraTab(L.dept)) { if (i.tabId !== L.dept) return false; } // 추가 탭: 그 탭을 고른 자료(공통 자료도)
       else if (i.common && !L.q) return false; // 공통 자료는 '공통' 탭에서. 찾을 때는 어느 탭에서나 함께
       else if (L.dept && i.deptId !== L.dept) return false;
       if (L.kind && i.kindId !== L.kind) return false;
@@ -2730,6 +2772,7 @@
     });
     if (!list.length) {
       var msg = L.view === 'archive' && !libYears().length ? '보관함이 비어 있어요. 새 학년도로 넘기면 지난 자료가 여기로 와요.'
+        : scope.length && libExtraTab(L.dept) && !L.q ? '이 탭에 아직 자료가 없어요. 자료 넣기·고치기 창에서 \'추가 탭\'을 고르면 여기에 보여요.'
         : scope.length ? '찾는 자료가 없어요.' + (L.view === 'now' ? ' 보관함에서도 찾아보세요.' : '')
         : '아직 자료가 없어요. "자료 넣기"로 첫 자료를 넣어 보세요.';
       box.innerHTML = '<div class="card"><p class="empty">' + msg + '</p></div>';
@@ -2827,6 +2870,9 @@
       '<input id="lf-title" class="input" maxlength="60" value="' + esc(i.title || '') + '" placeholder="예: 학년 협의록 양식" autocomplete="off"></div>' +
       '<div class="form-grid"><div class="field"><label class="label" for="lf-dept">부서</label>' + catSelect('lf-dept', d.depts, edit ? i.deptId : (S.me && S.me.deptId) || '', '(없음)') + '</div>' +
       '<div class="field"><label class="label" for="lf-kind">분류</label>' + catSelect('lf-kind', d.kinds, i.kindId || '', '(없음)') + '</div></div>' +
+      ((d.tabs || []).some(function (t) { return t.active || t.id === i.tabId; }) ? '<div class="field"><label class="label" for="lf-tab">추가 탭</label>' +
+        catSelect('lf-tab', d.tabs, edit ? i.tabId || '' : (libExtraTab(S.lib.dept) ? S.lib.dept : ''), '(없음)') +
+        '<p class="hint">' + icon('info', 16) + '<span>고르면 자기 부서 탭과 이 탭에 함께 보여요.</span></p></div>' : '') +
       '<div class="field"><label class="label" for="lf-desc">설명</label><textarea id="lf-desc" class="input" maxlength="500" rows="3" placeholder="어떤 자료인지 한두 줄로 적어 주세요">' + esc(i.desc || '') + '</textarea></div>' +
       '<div class="field"><label class="label" for="lf-owner">담당</label><input id="lf-owner" class="input" maxlength="20" value="' + esc(edit ? i.owner || '' : S.me.name) + '" autocomplete="off"></div>' +
       '<div class="field"><span class="label">넣는 방법</span><div class="seg" role="group" aria-label="넣는 방법" style="max-width:360px">' +
@@ -2865,6 +2911,7 @@
         '설명': qs('#lf-desc').value, '담당': qs('#lf-owner').value, mode: mode, link: qs('#lf-link').value.trim()
       };
       if (qs('#lf-home')) fields.home = qs('#lf-home').checked;
+      if (qs('#lf-tab')) fields['탭ID'] = qs('#lf-tab').value;
       fields.common = qs('#lf-common').checked;
       fields.commonOrder = fields.common ? qs('#lf-corder').value.trim() : '';
       if (fields.commonOrder && !/^\d+$/.test(fields.commonOrder)) { err.textContent = '공통 자료 순서는 숫자로 적어 주세요.'; qs('#lf-corder').focus(); return; }
@@ -4641,6 +4688,7 @@
     var notes = {
       '부서': '교직원 표·일정·자료에 쓰는 부서 이름이에요.',
       '자료 분류': '자료실 카드를 나누는 이름이에요.',
+      '자료실 탭': '자료실에 부서 탭 말고 더 두는 탭이에요. 자료실 탭 줄의 [+ 탭]으로도 만들어요.',
       '도움말 분류': '도움말을 나누는 이름이에요.'
     };
     panel.innerHTML = '<div class="wrap" style="gap:16px">' +
@@ -5286,6 +5334,7 @@
       case 'lib-edit': closeModal(); openLibForm(libById(id)); break;
       case 'lib-view': S.lib.view = t.getAttribute('data-v'); drawLib(); break;
       case 'lib-year': S.lib.year = t.getAttribute('data-y'); drawLib(); break;
+      case 'lib-tab-add': openLibTabAdd(); break;
       case 'lib-dept':
         S.lib.dept = id || '';
         qsa('[data-action="lib-dept"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === t)); });
