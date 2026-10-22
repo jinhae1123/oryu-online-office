@@ -2736,7 +2736,7 @@
       return;
     }
     var known = {};
-    // 공통 자료는 맨 위에 한 번만(부서 칸에는 다시 나오지 않음). 공통 순서 번호 → 제목 순
+    // 공통 자료는 '공통' 칸에 한 번만(부서 칸에는 다시 나오지 않음). 공통 순서 번호 → 제목 순
     var commons = list.filter(function (i) { return i.common; }).sort(function (a, b) {
       return (Number(a.commonOrder) || 999) - (Number(b.commonOrder) || 999) || a.title.localeCompare(b.title, 'ko');
     });
@@ -2839,7 +2839,7 @@
       (edit && edit.hasFile ? '<p class="box file-now">' + icon('doc', 18) + '<span>지금 파일: <b>' + esc(i.fileName) + '</b> · ' + esc(sizeText(i.fileSize)) + '</span></p>' : '') +
       '<input id="lf-file" class="input input-file" type="file">' +
       '<p class="hint">' + icon('info', 16) + '<span>' + d.maxMb + 'MB까지 올릴 수 있어요. 올린 파일은 공유하지 않는 드라이브 폴더에 두고, 온라인 교무실에서만 내려받아요.</span></p></div>' +
-      '<div class="common-box"><label class="check"><input type="checkbox" id="lf-common"' + (i.common ? ' checked' : '') + '>공통 자료로 자료실 맨 위에 보이기</label>' +
+      '<div class="common-box"><label class="check"><input type="checkbox" id="lf-common"' + (i.common ? ' checked' : '') + '>공통 자료로 자료실 '공통' 탭에 보이기</label>' +
       '<p class="hint">' + icon('info', 16) + '<span>비상연락망·출결 양식·가정통신문 양식·표준 기안문처럼 모든 선생님이 함께 보는 자료에 체크해요.</span></p>' +
       '<div class="field" id="lf-corder-box"' + (i.common ? '' : ' hidden') + ' style="max-width:240px"><label class="label" for="lf-corder">공통 자료 순서</label>' +
       '<input id="lf-corder" class="input" inputmode="numeric" maxlength="3" value="' + esc(i.commonOrder || '') + '" placeholder="숫자가 작을수록 앞"></div></div>' +
